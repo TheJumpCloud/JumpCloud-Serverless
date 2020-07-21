@@ -49,6 +49,10 @@ Resources:
               - lambda.amazonaws.com
             Action:
               - 'sts:AssumeRole'
+                'logs:CreateLogGroup'
+                'logs:CreateLogStream'
+                'logs:PutLogEvents'
+            Resource: '*'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AWSLambdaExecute
   DirectoryInsightsBucket:
