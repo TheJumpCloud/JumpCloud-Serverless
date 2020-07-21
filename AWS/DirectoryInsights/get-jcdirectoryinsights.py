@@ -1,14 +1,29 @@
-import requests, datetime, json, boto3, os, gzip
+import requests, datetime, json, boto3, os, gzip, base64
+
+def get_secret(secret_name):
+    client = boto3.client(service_name='secretsmanager')
+    try:
+        get_secret_value_response = client.get_secret_value(SecretId=secret_name)
+    except ClientError as e:
+        raise Exception(e)
+
+    if 'SecretString' in get_secret_value_response:
+        secret = get_secret_value_response['SecretString']
+        return json.loads(secret)
+    else:
+        decoded_binary_secret = base64.b64decode(get_secret_value_response['SecretBinary'])
+        return decoded_binary_secret
 
 def jc_directoryinsights(event, context):
     try:
-        jcapikey = os.environ['JCAPIKEY']
+        jcapikeyarn = os.environ['JcApiKeyArn']
         incrementType = os.environ['incrementType']
         incrementAmount = int(os.environ['incrementAmount'])
         bucketName = os.environ['BucketName']
     except KeyError as e:
         raise Exception(e)
 
+    jcapikey = get_secret(jcapikeyarn)
     now = datetime.datetime.utcnow()
 
     if incrementType == "minutes":

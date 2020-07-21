@@ -55,7 +55,7 @@ Resources:
       KmsKeyArn: !Sub ${KmsKeyArn}
       Environment:
         Variables:
-          JCAPIKEY: !Ref JcApiKey
+          JcApiKeyArn: !Ref JcApiKey
           incrementType: !Sub ${IncrementType}
           incrementAmount: !Sub ${IncrementAmount}
           BucketName: !Ref DirectoryInsightsBucket
