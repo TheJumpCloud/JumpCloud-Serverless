@@ -10,7 +10,7 @@ def get_secret(secret_name):
 
     if 'SecretString' in get_secret_value_response:
         secret = get_secret_value_response['SecretString']
-        return json.loads(secret)
+        return secret
     else:
         decoded_binary_secret = base64.b64decode(get_secret_value_response['SecretBinary'])
         return decoded_binary_secret

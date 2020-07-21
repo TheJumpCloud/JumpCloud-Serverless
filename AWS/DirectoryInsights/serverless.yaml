@@ -43,18 +43,18 @@ Resources:
     Properties:
       Description: JumpCloud API Key
       SecretString: !Ref JumpCloudApiKey
-  JcApiSecretPolicy:
+  JcApiResourcePolicy:
     Type: AWS::SecretsManager::ResourcePolicy
     Properties:
       SecretId: !Ref JcApiKey
-      PolicyDocument:
-        Id: AllowRoleRead
-        Version: '2012-10-17'
+      ResourcePolicy:
+        Version: 2012-10-17
         Statement:
         - Effect: Allow
-          Action:
-            - secretsmanager:GetSecretValue
-          Resource: '*'
+          Principal: 
+            AWS: !Sub ${RoleArn}
+          Action: secretsmanager:GetSecretValue
+          Resource: "*"
   DirectoryInsightsFunction:
     Type: AWS::Serverless::Function
     Properties:
