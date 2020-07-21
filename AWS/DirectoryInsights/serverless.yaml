@@ -41,11 +41,8 @@ Resources:
   JcApiKey:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Description: String
-      GenerateSecretString:
-        GenerateSecretString
-      KmsKeyId: !Sub ${KmsKeyArn}
-      SecretString: !Sub '{"jcapikey": ${JumpCloudApiKey}}'
+      Description: JumpCloud API Key
+      SecretString: !Ref JumpCloudApiKey
   DirectoryInsightsFunction:
     Type: AWS::Serverless::Function
     Properties:
