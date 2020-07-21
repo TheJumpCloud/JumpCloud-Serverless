@@ -69,6 +69,7 @@ This Application requires `boto3`, and `requests`. Install these dependencies us
 ```bash
 ~/jc-directoryinsights$ pip3 install boto3 -t .
 ~/jc-directoryinsights$ pip3 install requests -t .
+~/jc-directoryinsights$ pip3 install pybase64 -t .
 ```
 
 Create a ZIP archive of the Python script and the dependencies.
