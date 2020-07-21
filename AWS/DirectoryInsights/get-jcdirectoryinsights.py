@@ -41,8 +41,6 @@ def jc_directoryinsights(event, context):
     start_date = start_dt.isoformat("T") + "Z"
     end_date = now.isoformat("T") + "Z"
 
-    #fileStartDate = datetime.datetime.strftime(start_dt, "%m-%d-%YT%H-%M-%SZ")
-    #fileEndDate = datetime.datetime.strftime(now, "%m-%d-%YT%H-%M-%SZ")
     outfileName = "jc_directoryinsights_" + start_date + "_" + end_date + ".json.gz"
 
     url = "https://api.jumpcloud.com/insights/directory/v1/events"
@@ -66,7 +64,6 @@ def jc_directoryinsights(event, context):
         raise Exception(e)
     responseBody = json.loads(response.text)
 
-    # Change to CloudWatch Metrics
     if response.text.strip() == "[]":
         cloudwatch = boto3.client('cloudwatch')
         metric = cloudwatch.put_metric_data(
@@ -89,6 +86,7 @@ def jc_directoryinsights(event, context):
             ],
             Namespace = 'JumpCloudDirectoryInsights'
         )
+        return
 
     data = responseBody
 

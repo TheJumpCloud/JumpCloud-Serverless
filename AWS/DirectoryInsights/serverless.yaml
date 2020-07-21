@@ -49,12 +49,17 @@ Resources:
               - lambda.amazonaws.com
             Action:
               - 'sts:AssumeRole'
-                'logs:CreateLogGroup'
-                'logs:CreateLogStream'
-                'logs:PutLogEvents'
-            Resource: '*'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AWSLambdaExecute
+      Policies:
+        - PolicyName: CloudWatchMetrics
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'cloudwatch:PutMetricData'
+                Resource: '*'
   DirectoryInsightsBucket:
     Type: AWS::S3::Bucket
   DirectoryInsightsCmk:
