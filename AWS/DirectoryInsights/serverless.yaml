@@ -5,12 +5,12 @@ Parameters:
   JumpCloudApiKey:
     Type: String
     AllowedPattern: \b[a-z0-9]{40}\b
-  KmsKeyArn:
-    Type: String
-    AllowedPattern: arn:aws:kms:(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d:\d{12}:key\/\b[a-z0-9]{8}-\b[a-z0-9]{4}-\b[a-z0-9]{4}-\b[a-z0-9]{4}-\b[a-z0-9]{12}
-  RoleArn:
-    Type: String
-    AllowedPattern: arn:aws:iam::\d{12}:role\/?[a-zA-Z_0-9+=,.@\\\-_\/]+
+  #KmsKeyArn:
+  #  Type: String
+  #  AllowedPattern: arn:aws:kms:(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d:\d{12}:key\/\b[a-z0-9]{8}-\b[a-z0-9]{4}-\b[a-z0-9]{4}-\b[a-z0-9]{4}-\b[a-z0-9]{12}
+  #RoleArn:
+  #  Type: String
+  #  AllowedPattern: arn:aws:iam::\d{12}:role\/?[a-zA-Z_0-9+=,.@\\\-_\/]+
   IncrementType:
     Type: String
     Default: day
@@ -36,8 +36,49 @@ Metadata:
     SourceCodeUrl: https://git.io/JeK7O
 
 Resources:
+  DirectoryInsightsRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      Description: A role for use in the JumpCloud Directory Insights Serverless App
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSLambdaExecute
   DirectoryInsightsBucket:
     Type: AWS::S3::Bucket
+  DirectoryInsightsCmk:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: An Symmetric CMK for use in the JumpCloud Directory Insights Serverless App
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: key-default-1
+        Statement:
+        - Sid: Enable IAM User Permissions
+          Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+          Action: kms:*
+          Resource: '*'
+        - Sid: Allow use of the key
+          Effect: Allow
+          Principal:
+            AWS: !GetAtt DirectoryInsightsRole.Arn
+          Action:
+          - kms:DescribeKey
+          - kms:Encrypt
+          - kms:Decrypt
+          - kms:ReEncrypt*
+          - kms:GenerateDataKey
+          - kms:GenerateDataKeyWithoutPlaintext
+          Resource: '*'
   JcApiKey:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -52,7 +93,7 @@ Resources:
         Statement:
         - Effect: Allow
           Principal: 
-            AWS: !Sub ${RoleArn}
+            AWS: !GetAtt DirectoryInsightsRole.Arn
           Action: secretsmanager:GetSecretValue
           Resource: "*"
   DirectoryInsightsFunction:
@@ -63,8 +104,8 @@ Resources:
       MemorySize: 192
       Timeout: 180
       Runtime: python3.7
-      Role: !Sub ${RoleArn}
-      KmsKeyArn: !Sub ${KmsKeyArn}
+      Role: !GetAtt DirectoryInsightsRole.Arn
+      KmsKeyArn: !GetAtt DirectoryInsightsCmk.Arn
       Environment:
         Variables:
           JcApiKeyArn: !Ref JcApiKey
