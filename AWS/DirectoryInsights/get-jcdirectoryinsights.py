@@ -1,4 +1,4 @@
-import requests, datetime, json, boto3, os, gzip, base64
+import requests, datetime, json, boto3, os, gzip
 from botocore.exceptions import ClientError
 
 def get_secret(secret_name):
@@ -59,11 +59,12 @@ def jc_directoryinsights(event, context):
         'user-agent': "JumpCloud_AWSServerless.DirectoryInsights/0.0.1"
         }
 
+    response = requests.post(url, json=body, headers=headers)
     try:
-        response = requests.post(url, json=body, headers=headers)
-        responseBody = json.loads(response.text)
-    except (requests.exceptions.RequestException, requests.exceptions.HTTPError) as e:
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as e:
         raise Exception(e)
+    responseBody = json.loads(response.text)
 
     # Change to CloudWatch Metrics
     if response.text.strip() == "[]":
@@ -73,12 +74,13 @@ def jc_directoryinsights(event, context):
 
     while (response.headers["X-Result-Count"] >= response.headers["X-Limit"]):
         body["search_after"] = json.loads(response.headers["X-Search_After"])
+        response = requests.post(url, json=body, headers=headers)
         try:
-            response = requests.post(url, json=body, headers=headers)
-            responseBody = json.loads(response.text)
-            data = data + responseBody
-        except (requests.exceptions.RequestException, requests.exceptions.HTTPError) as e:
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as e:
             raise Exception(e)
+        responseBody = json.loads(response.text)
+        data = data + responseBody
         
     gzOutfile = gzip.GzipFile(filename="/tmp/" + outfileName, mode="w", compresslevel=9)
     gzOutfile.write(json.dumps(data, indent=2).encode("UTF-8"))
