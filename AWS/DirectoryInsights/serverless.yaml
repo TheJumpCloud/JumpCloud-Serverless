@@ -38,6 +38,14 @@ Metadata:
 Resources:
   DirectoryInsightsBucket:
     Type: AWS::S3::Bucket
+  JcApiKey:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: String
+      GenerateSecretString:
+        GenerateSecretString
+      KmsKeyId: !Sub ${KmsKeyArn}
+      SecretString: !Sub '{"jcapikey": ${JumpCloudApiKey}}'
   DirectoryInsightsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -50,7 +58,7 @@ Resources:
       KmsKeyArn: !Sub ${KmsKeyArn}
       Environment:
         Variables:
-          JCAPIKEY: !Sub ${JumpCloudApiKey}
+          JCAPIKEY: !Ref JcApiKey
           incrementType: !Sub ${IncrementType}
           incrementAmount: !Sub ${IncrementAmount}
           BucketName: !Ref DirectoryInsightsBucket

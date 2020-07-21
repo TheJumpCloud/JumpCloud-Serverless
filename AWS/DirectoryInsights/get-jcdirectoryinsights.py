@@ -1,10 +1,13 @@
 import requests, datetime, json, boto3, os, gzip
 
 def jc_directoryinsights(event, context):
-    jcapikey = os.environ['JCAPIKEY']
-    incrementType = os.environ['incrementType']
-    incrementAmount = int(os.environ['incrementAmount'])
-    bucketName = os.environ['BucketName']
+    try:
+        jcapikey = os.environ['JCAPIKEY']
+        incrementType = os.environ['incrementType']
+        incrementAmount = int(os.environ['incrementAmount'])
+        bucketName = os.environ['BucketName']
+    except KeyError as e:
+        raise Exception(e)
 
     now = datetime.datetime.utcnow()
 
@@ -22,14 +25,13 @@ def jc_directoryinsights(event, context):
         start_dt = now - datetime.timedelta(days=incrementAmount)
     else:
         raise Exception("Unknown increment value.")
-        return
 
     start_date = start_dt.isoformat("T") + "Z"
     end_date = now.isoformat("T") + "Z"
 
-    fileStartDate = datetime.datetime.strftime(start_dt, "%m-%d-%YT%H-%M-%SZ")
-    fileEndDate = datetime.datetime.strftime(now, "%m-%d-%YT%H-%M-%SZ")
-    outfileName = "jc_directoryinsights_" + fileStartDate + "_" + fileEndDate + ".json.gz"
+    #fileStartDate = datetime.datetime.strftime(start_dt, "%m-%d-%YT%H-%M-%SZ")
+    #fileEndDate = datetime.datetime.strftime(now, "%m-%d-%YT%H-%M-%SZ")
+    outfileName = "jc_directoryinsights_" + start_date + "_" + end_date + ".json.gz"
 
     url = "https://api.jumpcloud.com/insights/directory/v1/events"
 
@@ -50,11 +52,10 @@ def jc_directoryinsights(event, context):
         responseBody = json.loads(response.text)
     except (requests.exceptions.RequestException, requests.exceptions.HTTPError) as e:
         raise Exception(e)
-        exit(1)
 
+    # Change to CloudWatch Metrics
     if response.text.strip() == "[]":
         raise Exception("There have been no events in the last {0} {1}.".format(incrementAmount, incrementType))
-        return 
 
     data = responseBody
 
@@ -66,7 +67,6 @@ def jc_directoryinsights(event, context):
             data = data + responseBody
         except (requests.exceptions.RequestException, requests.exceptions.HTTPError) as e:
             raise Exception(e)
-            exit(1)
         
     gzOutfile = gzip.GzipFile(filename="/tmp/" + outfileName, mode="w", compresslevel=9)
     gzOutfile.write(json.dumps(data, indent=2).encode("UTF-8"))
