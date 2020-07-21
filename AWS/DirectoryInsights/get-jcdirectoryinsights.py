@@ -68,7 +68,27 @@ def jc_directoryinsights(event, context):
 
     # Change to CloudWatch Metrics
     if response.text.strip() == "[]":
-        raise Exception("There have been no events in the last {0} {1}.".format(incrementAmount, incrementType))
+        cloudwatch = boto3.client('cloudwatch')
+        metric = cloudwatch.put_metric_data(
+            MetricData=[
+                {
+                    'MetricName': 'NoResults',
+                    'Dimensions': [
+                        {
+                            'Name': 'JumpCloud',
+                            'Value': 'DirectoryInsightsServerlessApp'
+                        },
+                        {
+                            'Name': 'Version',
+                            'Value': '0.0.1'
+                        }
+                    ],
+                    'Unit': 'None',
+                    'Value': 1
+                },
+            ],
+            Namespace = 'JumpCloudDirectoryInsights'
+        )
 
     data = responseBody
 
