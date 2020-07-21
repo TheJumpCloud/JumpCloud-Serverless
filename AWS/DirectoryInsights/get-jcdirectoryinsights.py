@@ -1,4 +1,5 @@
 import requests, datetime, json, boto3, os, gzip, base64
+from botocore.exceptions import ClientError
 
 def get_secret(secret_name):
     client = boto3.client(service_name='secretsmanager')
