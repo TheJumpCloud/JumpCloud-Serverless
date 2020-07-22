@@ -1,4 +1,6 @@
 # Gather JumpCloud Directory Insights Data with an AWS Serverless Application
+_This document will walk a JumpCloud Administrator through packaging and deploying this Serverless Application manually. This workflow is intended for those who need to make modifications to the code or tie this solution into other AWS resources. If you would simply like to deploy this Serverless Application as-is, you can do so from the Serverless Application Repository \<placeholder for link when it is offically published\>_
+
 _Note: This document assumes the use of Python 3+_
 ## Table of Contents
 - [Gather JumpCloud Directory Insights Data with an AWS Serverless Application](#gather-jumpcloud-directory-insights-data-with-an-aws-serverless-application)
