@@ -4,11 +4,11 @@ Transform: AWS::Serverless-2016-10-31
 Parameters:
   JumpCloudApiKey:
     Type: String
+    NoEcho: true
     AllowedPattern: \b[a-z0-9]{40}\b
   IncrementType:
     Type: String
     Default: day
-    NoEcho: true
     AllowedValues:
       - minute
       - minutes
