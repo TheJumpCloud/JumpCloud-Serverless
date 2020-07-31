@@ -8,6 +8,7 @@ Parameters:
   IncrementType:
     Type: String
     Default: day
+    NoEcho: true
     AllowedValues:
       - minute
       - minutes
