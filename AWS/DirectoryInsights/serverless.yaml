@@ -21,9 +21,6 @@ Parameters:
     Type: Number
     Default: 1
 
-Conditions:
-  plural: Fn::If [Fn::Equals [!Ref "IncrementAmount", 1], Fn::Select [0, Fn::Split ["s", !Ref "IncrementType"]], !Ref "IncrementType"]
-
 Metadata:
   AWS::ServerlessRepo::Application:
     Name: JumpCloud-DirectoryInsights
@@ -32,7 +29,7 @@ Metadata:
     SemanticVersion: 1.0.0
     HomePageUrl: https://git.io/JJlrZ
     SourceCodeUrl: https://git.io/JJiMo
-    LicenseUrl: https://git.io/JJiMF
+    LicenseUrl: LICENSE
 
 Resources:
   DirectoryInsightsRole:
@@ -124,4 +121,4 @@ Resources:
         GrabDirectoryInsights:
           Type: Schedule
           Properties:
-            Schedule: !Sub "rate(${IncrementAmount} ${plural})"
+            Schedule: !Sub "rate(${IncrementAmount} ${IncrementType})"
