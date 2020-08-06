@@ -23,17 +23,11 @@ def jc_directoryinsights(event, context):
     jcapikey = get_secret(jcapikeyarn)
     now = datetime.datetime.utcnow()
 
-    if incrementType == "minutes":
+    if incrementType == "minutes" or incrementType == "minute":
         start_dt = now - datetime.timedelta(minutes=incrementAmount)
-    elif incrementType == "minute":
-        start_dt = now - datetime.timedelta(minutes=incrementAmount)
-    elif incrementType == "hours":
+    elif incrementType == "hours" or incrementType == "hour":
         start_dt = now - datetime.timedelta(hours=incrementAmount)
-    elif incrementType == "hour":
-        start_dt = now - datetime.timedelta(minutes=incrementAmount)
-    elif incrementType == "days":
-        start_dt = now - datetime.timedelta(days=incrementAmount)
-    elif incrementType == "day":
+    elif incrementType == "days" or incrementType == "day":
         start_dt = now - datetime.timedelta(days=incrementAmount)
     else:
         raise Exception("Unknown increment value.")
