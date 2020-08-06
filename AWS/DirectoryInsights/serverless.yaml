@@ -21,6 +21,9 @@ Parameters:
     Type: Number
     Default: 1
 
+Conditions:
+  isSingular: !Equals [!Ref "IncrementAmount", 1]
+
 Metadata:
   AWS::ServerlessRepo::Application:
     Name: JumpCloud-DirectoryInsights
@@ -121,4 +124,4 @@ Resources:
         GrabDirectoryInsights:
           Type: Schedule
           Properties:
-            Schedule: !Sub "rate(${IncrementAmount} ${IncrementType})"
+            Schedule: !Join ["", [!Sub "rate(${IncrementAmount} ", !If [isSingular, !Select [0, !Split ["s", !Ref "IncrementType"]], !Join ["", [!Select [0, !Split ["s", !Ref "IncrementType"]], "s"]]], ")"]]
