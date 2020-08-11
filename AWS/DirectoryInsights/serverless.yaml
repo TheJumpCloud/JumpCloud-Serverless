@@ -20,6 +20,10 @@ Parameters:
   IncrementAmount:
     Type: Number
     Default: 1
+  OrganizationID:
+    Type: String
+    Default: ''
+    Description: OPTIONAL - This parameter can be used to allow MTP Admins to select which Organization they would like to collect Directory Insights data for.
 
 Conditions:
   isSingular: !Equals [!Ref "IncrementAmount", 1]
@@ -29,7 +33,7 @@ Metadata:
     Name: JumpCloud-DirectoryInsights
     Description: This Serverless Application can be used to collect your JumpCloud Directory Insights data at a regular interval.
     Author: JumpCloud Solutions Architecture
-    SemanticVersion: 1.0.0
+    SemanticVersion: 1.1.0
     HomePageUrl: https://git.io/JJlrZ
     SourceCodeUrl: https://git.io/JJiMo
     LicenseUrl: LICENSE
@@ -120,6 +124,7 @@ Resources:
           incrementType: !Sub ${IncrementType}
           incrementAmount: !Sub ${IncrementAmount}
           BucketName: !Ref DirectoryInsightsBucket
+          OrgId: !Sub ${OrganizationID}
       Events:
         GrabDirectoryInsights:
           Type: Schedule

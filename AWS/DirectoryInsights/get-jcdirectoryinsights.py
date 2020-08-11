@@ -17,6 +17,7 @@ def jc_directoryinsights(event, context):
         incrementType = os.environ['incrementType']
         incrementAmount = int(os.environ['incrementAmount'])
         bucketName = os.environ['BucketName']
+        orgId = os.environ['OrgId']
     except KeyError as e:
         raise Exception(e)
 
@@ -49,7 +50,10 @@ def jc_directoryinsights(event, context):
         'x-api-key': jcapikey,
         'content-type': "application/json",
         'user-agent': "JumpCloud_AWSServerless.DirectoryInsights/0.0.1"
-        }
+    }
+
+    if orgId != '':
+        headers['x-org-id'] = orgId
 
     response = requests.post(url, json=body, headers=headers)
     try:
