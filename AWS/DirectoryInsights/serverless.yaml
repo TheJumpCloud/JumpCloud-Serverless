@@ -103,7 +103,6 @@ Resources:
       ResourcePolicy:
         Version: 2012-10-17
         Statement:
-        - Effect: Allow
           Principal: 
             AWS: !GetAtt DirectoryInsightsRole.Arn
           Action: secretsmanager:GetSecretValue
@@ -112,7 +111,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: get-jcdirectoryinsights.zip
-      Handler: get-jcdirectoryinsights.jc_directoryinsights
+      Handler: get-jcdirectoryinsights.main
       MemorySize: 192
       Timeout: 180
       Runtime: python3.7

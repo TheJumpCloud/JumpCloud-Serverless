@@ -11,7 +11,7 @@ def get_secret(secret_name):
     secret = get_secret_value_response['SecretString']
     return secret
 
-def jc_directoryinsights(event, context):
+def main(event, context):
     try:
         jcapikeyarn = os.environ['JcApiKeyArn']
         incrementType = os.environ['incrementType']
@@ -36,7 +36,8 @@ def jc_directoryinsights(event, context):
     start_date = start_dt.isoformat("T") + "Z"
     end_date = now.isoformat("T") + "Z"
 
-    outfileName = "jc_directoryinsights_" + start_date + "_" + end_date + ".json.gz"
+    outfileName = "jc_directoryinsights_" + start_date + "_" + end_date + ".json"
+    # outfileName = "jc_directoryinsights_" + start_date + "_" + end_dat
 
     url = "https://api.jumpcloud.com/insights/directory/v1/events"
 
@@ -98,14 +99,18 @@ def jc_directoryinsights(event, context):
         responseBody = json.loads(response.text)
         data = data + responseBody
     try:    
-        gzOutfile = gzip.GzipFile(filename="/tmp/" + outfileName, mode="w", compresslevel=9)
-        gzOutfile.write(json.dumps(data, indent=2).encode("UTF-8"))
-        gzOutfile.close()
+        # f = open("/tmp/" + outfileName, "w")
+        # f.write(json.dumps(data, indent=2).encode("UTF-8"))
+        with open("/tmp/" + outfileName, 'w') as f:
+            json.dump(data, f)
     except Exception as e:
         raise Exception(e)
-
     try:
         s3 = boto3.client('s3')
+        print(outfileName)
         s3.upload_file("/tmp/" + outfileName, bucketName, outfileName)
     except ClientError as e:
         raise Exception(e)
+
+if __name__ == "__main__":   
+    main('', '')
