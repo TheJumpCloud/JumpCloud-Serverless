@@ -1,4 +1,4 @@
-# Gather JumpCloud Directory Insights Data with an AWS Serverless Application
+# Gather JumpCloud Directory Insights Data with an AWS Serverless Application (Single Line Output)
 _This document will walk a JumpCloud Administrator through packaging and deploying this Serverless Application manually. This workflow is intended for those who need to make modifications to the code or tie this solution into other AWS resources. If you would simply like to deploy this Serverless Application as-is, you can do so from the Serverless Application Repository \<placeholder for link when it is offically published\>_
 
 _Note: This document assumes the use of Python 3+_
@@ -16,6 +16,8 @@ _Note: This document assumes the use of Python 3+_
 ## Pre-requisites
 - [Your JumpCloud API key](https://docs.jumpcloud.com/2.0/authentication-and-authorization/authentication-and-authorization-overview)
 - [AWS CLI installed](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html)
+  - Note: This has tested using the following versions. It should support any version of Python v2.7+ and 3.0+, however AWS recently made changes to their CLI tool that may cause issues with older versions of either AWS or Python. 
+  - `aws-cli/2.2.22 Python/3.8.8`.
 - [AWS SAM CLI installed](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html)
 - A valid Amazon S3 bucket policy that grants the service read permissions for artifacts uploaded to Amazon S3 when you package your application.
   - Go to the [S3 Console](https://s3.console.aws.amazon.com/s3/)

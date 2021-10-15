@@ -30,13 +30,13 @@ Conditions:
 
 Metadata:
   AWS::ServerlessRepo::Application:
-    Name: JumpCloud-DirectoryInsights
-    Description: This Serverless Application can be used to collect your JumpCloud Directory Insights data at a regular interval.
+    Name: JumpCloud-DirectoryInsights-SingleLine
+    Description: This Serverless Application can be used to collect your JumpCloud Directory Insights data at a regular interval, outputting a single Directory Insights Event to a single line.
     Author: JumpCloud Solutions Architecture
-    SemanticVersion: 1.1.0
+    SemanticVersion: 1.1.1
     HomePageUrl: https://git.io/JJlrZ
     SourceCodeUrl: https://git.io/JJiMo
-    LicenseUrl: LICENSE
+    #LicenseUrl: LICENSE
 
 Resources:
   DirectoryInsightsRole:

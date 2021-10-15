@@ -99,7 +99,7 @@ def jc_directoryinsights(event, context):
         data = data + responseBody
     try:    
         gzOutfile = gzip.GzipFile(filename="/tmp/" + outfileName, mode="w", compresslevel=9)
-        gzOutfile.write(json.dumps(data, indent=2).encode("UTF-8"))
+        gzOutfile.write(('[' + ',\n'.join(json.dumps(i) for i in data) + ']').encode('UTF-8'))
         gzOutfile.close()
     except Exception as e:
         raise Exception(e)
