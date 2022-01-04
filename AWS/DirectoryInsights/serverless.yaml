@@ -24,6 +24,10 @@ Parameters:
     Type: String
     Default: ''
     Description: OPTIONAL - This parameter can be used to allow MTP Admins to select which Organization they would like to collect Directory Insights data for.
+  Service:
+    Type: CommaDelimitedList
+    Default: "all"
+    Description: 'Comma-delimited list of desired services to filter. Available services: "directory","radius","sso","systems","ldap","mdm". Default value is "all"'
 
 Conditions:
   isSingular: !Equals [!Ref "IncrementAmount", 1]
@@ -123,6 +127,7 @@ Resources:
           JcApiKeyArn: !Ref JcApiKey
           incrementType: !Sub ${IncrementType}
           incrementAmount: !Sub ${IncrementAmount}
+          service: !Sub ${Service}
           BucketName: !Ref DirectoryInsightsBucket
           OrgId: !Sub ${OrganizationID}
       Events:
