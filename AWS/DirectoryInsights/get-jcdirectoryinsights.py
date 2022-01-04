@@ -12,6 +12,7 @@ def get_secret(secret_name):
     return secret
 
 def jc_directoryinsights(event, context):
+    #TODO: Add service param
     try:
         jcapikeyarn = os.environ['JcApiKeyArn']
         incrementType = os.environ['incrementType']
@@ -37,7 +38,7 @@ def jc_directoryinsights(event, context):
     end_date = now.isoformat("T") + "Z"
 
     outfileName = "jc_directoryinsights_" + start_date + "_" + end_date + ".json.gz"
-
+    #TODO: Loop through list of services and concat response bodies into singular file
     url = "https://api.jumpcloud.com/insights/directory/v1/events"
 
     body = {
@@ -62,6 +63,7 @@ def jc_directoryinsights(event, context):
         raise Exception(e)
     responseBody = json.loads(response.text)
 
+    #TODO: Add service name to MetricName, leave in loop, adjust return
     if response.text.strip() == "[]":
         cloudwatch = boto3.client('cloudwatch')
         metric = cloudwatch.put_metric_data(
@@ -97,6 +99,8 @@ def jc_directoryinsights(event, context):
             raise Exception(e)
         responseBody = json.loads(response.text)
         data = data + responseBody
+    
+    
     try:    
         gzOutfile = gzip.GzipFile(filename="/tmp/" + outfileName, mode="w", compresslevel=9)
         gzOutfile.write(json.dumps(data, indent=2).encode("UTF-8"))
