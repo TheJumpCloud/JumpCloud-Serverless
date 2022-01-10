@@ -27,7 +27,7 @@ Parameters:
   Service:
     Type: CommaDelimitedList
     Default: "all"
-    Description: 'Comma-delimited list of desired services to log. Available services: "directory","radius","sso","systems","ldap","mdm". Default value is "all"'
+    Description: 'Comma-delimited list of desired services to log. Available services: directory,radius,sso,systems,ldap,mdm. Default value is "all"'
 
 Conditions:
   isSingular: !Equals [!Ref "IncrementAmount", 1]
