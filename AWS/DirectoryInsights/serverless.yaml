@@ -25,7 +25,7 @@ Parameters:
     Default: ''
     Description: OPTIONAL - This parameter can be used to allow MTP Admins to select which Organization they would like to collect Directory Insights data for.
   Service:
-    Type: CommaDelimitedList
+    Type: String
     Default: "all"
     Description: 'Comma-delimited list of desired services to log. Available services: directory,radius,sso,systems,ldap,mdm. Default value is "all"'
 
