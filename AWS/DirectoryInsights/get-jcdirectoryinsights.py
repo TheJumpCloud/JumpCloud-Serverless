@@ -108,7 +108,7 @@ def jc_directoryinsights(event, context):
 
         finalData += data
     
-    if '[]' in finalData:
+    if len(finalData) == 0:
         return
     
     finalData.sort(key = lambda x:x['timestamp'], reverse=True)
