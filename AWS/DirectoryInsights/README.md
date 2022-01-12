@@ -11,7 +11,6 @@ _Note: This document assumes the use of Python 3+_
   - [Package and Deploy the Application](#package-and-deploy-the-application)
     - [Packaging the Application](#packaging-the-application)
     - [Deploying the Application](#deploying-the-application)
-    - [Alternative: Publish the Application](#alternative-publish-the-application)
 
 ## Pre-requisites
 - [Your JumpCloud API key](https://docs.jumpcloud.com/2.0/authentication-and-authorization/authentication-and-authorization-overview)
@@ -84,7 +83,7 @@ Using the AWS CLI, you can [deploy](https://docs.aws.amazon.com/cli/latest/refer
 ~/jc-directoryinsights$ aws cloudformation deploy --template-file ./packaged.yaml --stack-name <YOUR STACK NAME> --parameter-overrides JumpCloudApiKey=<API KEY> IncrementType=<INCREMENT TYPE> IncrementAmount=<INCREMENT AMOUNT> Service=<SERVICES> --capabilities CAPABILITY_IAM
 ```
 _Note: IncrementType accepts "minute", "minutes", "hour", "hours", "day", and "days". Use the singular if the IncrementAmount is "1". <br>
-Service accepts a comma-delimited list of services to log. Available services are the following: directory,radius,sso,systems,ldap,mdm_
+Service accepts a comma-delimited list of services to log. To select all services, set the Service parameter to "all". To limit data to a specific service set the Service parameter to any of the following: directory,radius,sso,systems,ldap,mdm.
 </details>
 
 <details>
