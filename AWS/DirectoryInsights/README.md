@@ -1,5 +1,5 @@
 # Gather JumpCloud Directory Insights Data with an AWS Serverless Application
-_This document will walk a JumpCloud Administrator through packaging and deploying this Serverless Application manually. This workflow is intended for those who need to make modifications to the code or tie this solution into other AWS resources. If you would simply like to deploy this Serverless Application as-is, you can do so from the Serverless Application Repository \<placeholder for link when it is offically published\>_
+_This document will walk a JumpCloud Administrator through packaging and deploying this Serverless Application manually. This workflow is intended for those who need to make modifications to the code or tie this solution into other AWS resources. If you would simply like to deploy this Serverless Application as-is, you can do so from the [Serverless Application Repository](https://serverlessrepo.aws.amazon.com/applications/us-east-2/339347137473/JumpCloud-DirectoryInsights)_
 
 _Note: This document assumes the use of Python 3+_
 ## Table of Contents
@@ -11,7 +11,6 @@ _Note: This document assumes the use of Python 3+_
   - [Package and Deploy the Application](#package-and-deploy-the-application)
     - [Packaging the Application](#packaging-the-application)
     - [Deploying the Application](#deploying-the-application)
-    - [Alternative: Publish the Application](#alternative-publish-the-application)
 
 ## Pre-requisites
 - [Your JumpCloud API key](https://docs.jumpcloud.com/2.0/authentication-and-authorization/authentication-and-authorization-overview)
@@ -45,7 +44,7 @@ _Note: This document assumes the use of Python 3+_
   
 ## Create Python Script
 
-Create a directory to store your Serverless Application and any dependencies required. In the root of that directory create your [Python Script](https://github.com/TheJumpCloud/support/blob/SA-1258-DI-Serverless/AWS/Serverless/DirectoryInsights/get-jcdirectoryinsights.py).
+Create a directory to store your Serverless Application and any dependencies required. In the root of that directory create your [Python Script](https://github.com/TheJumpCloud/JumpCloud-Serverless/blob/master/AWS/DirectoryInsights/get-jcdirectoryinsights.py).
 
 This Application requires `boto3`, and `requests`. Install these dependencies using pip3. Within the directory you created, run the following commands to install the dependencies within the directory.
 ```bash
@@ -76,15 +75,19 @@ _Note: Provide the name of the S3 bucket that you created for packaging and stor
 
 
 ### Deploying the Application
+<details>
+<summary>AWS CLI</summary>
 
 Using the AWS CLI, you can [deploy](https://docs.aws.amazon.com/cli/latest/reference/cloudformation/deploy/index.html) your template directly from your terminal.
 ```
-~/jc-directoryinsights$ aws cloudformation deploy --template-file ./packaged.yaml --stack-name <YOUR STACK NAME> --parameter-overrides JumpCloudApiKey=<API KEY> IncrementType=<INCREMENT TYPE> IncrementAmount=<INCREMENT AMOUNT>
+~/jc-directoryinsights$ aws cloudformation deploy --template-file ./packaged.yaml --stack-name <YOUR STACK NAME> --parameter-overrides JumpCloudApiKey=<API KEY> IncrementType=<INCREMENT TYPE> IncrementAmount=<INCREMENT AMOUNT> Service=<SERVICES> --capabilities CAPABILITY_IAM
 ```
-_Note: IncrementType accepts "minute", "minutes", "hour", "hours", "day", and "days". Use the singular if the IncrementAmount is "1"._
+_Note: IncrementType accepts "minute", "minutes", "hour", "hours", "day", and "days". Use the singular if the IncrementAmount is "1". <br>
+Service accepts a comma-delimited list of services to log. To select all services, set the Service parameter to "all". To limit data to a specific service set the Service parameter to any of the following: directory,radius,sso,systems,ldap,mdm.
+</details>
 
-### Alternative: Publish the Application
-
+<details>
+<summary>Deploy Alternative: Privately Publish the Application</summary>
 Rather than deploying your Application from the CLI, you can also publish your application so that it is viewable via the [Severless Application Repository](https://console.aws.amazon.com/serverlessrepo/). By default, published applications are "Private" so they will not be publicly available until set otherwise.
 
 Using the AWS SAM CLI, publish your application to the Serverless Applications Repository.
@@ -92,3 +95,4 @@ Using the AWS SAM CLI, publish your application to the Serverless Applications R
 ~/jc-directorys$ sam publish --template packaged.yaml --region <REGION>
 ```
 Once you have published your Application to the [Severless Application Repository](https://console.aws.amazon.com/serverlessrepo/), you can find and deploy your application from the Private Applications tab.
+</details>

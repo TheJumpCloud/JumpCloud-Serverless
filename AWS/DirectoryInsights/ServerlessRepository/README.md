@@ -10,6 +10,8 @@ This application will allow you to export your JumpCloud Organization's Director
   - Together these parameters will form the cadence at which this application exports your JumpCloud Directory Insights data. _Note: If your IncrementAmount is 1, please use the singular word for IncrementType_
 - JumpCloudApiKey
   - Your [JumpCloud API key](https://docs.jumpcloud.com/2.0/authentication-and-authorization/authentication-and-authorization-overview) will be safely stored in AWS Secrets Manager.
+- Service
+  - Here is where you can pick and choose which services you would like to collect the logging for. You can mix and match or choose all of them!
 
 ### What This Application Does
 

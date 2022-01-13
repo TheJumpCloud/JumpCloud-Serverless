@@ -24,6 +24,10 @@ Parameters:
     Type: String
     Default: ''
     Description: OPTIONAL - This parameter can be used to allow MTP Admins to select which Organization they would like to collect Directory Insights data for.
+  Service:
+    Type: String
+    Default: "all"
+    Description: 'Comma-delimited list of desired services to log. Available services: directory,radius,sso,systems,ldap,mdm. Default value is "all"'
 
 Conditions:
   isSingular: !Equals [!Ref "IncrementAmount", 1]
@@ -33,7 +37,7 @@ Metadata:
     Name: JumpCloud-DirectoryInsights
     Description: This Serverless Application can be used to collect your JumpCloud Directory Insights data at a regular interval.
     Author: JumpCloud Solutions Architecture
-    SemanticVersion: 1.1.0
+    SemanticVersion: 1.2.0
     HomePageUrl: https://git.io/JJlrZ
     SourceCodeUrl: https://git.io/JJiMo
     LicenseUrl: LICENSE
@@ -123,6 +127,7 @@ Resources:
           JcApiKeyArn: !Ref JcApiKey
           incrementType: !Sub ${IncrementType}
           incrementAmount: !Sub ${IncrementAmount}
+          service: !Sub ${Service}
           BucketName: !Ref DirectoryInsightsBucket
           OrgId: !Sub ${OrganizationID}
       Events:
