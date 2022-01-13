@@ -8,6 +8,7 @@ All notable changes to the AWS Directory Insights Serverless App will be documen
 
 - Ability to filter available services instead of querying all directory insights data.
   - Service can be set to query any of: "directory, radius, sso, systems, ldap, mdm" instead of the default "all" services
+- CloudWatch will now log for each service, notating when no results are found as NoResults_SERVICENAME
 
 ## [1.1.0] - 2020-08-11
 
