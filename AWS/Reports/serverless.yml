@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  JumpCloudApiKey:
+    Type: String
+    NoEcho: true
+    AllowedPattern: \b[a-z0-9]{40}\b
+  BotUserAccessToken:
+    Type: String
+    Default: ''
+    Description: slack bot (preconfigured) access token
+  slackChannelId:
+    Type: String
+    Default: ''
+    Description: slack channel id
+
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: JumpCloud-ReportTool
+    Description: This Serverless Application can be used to collect your JumpCloud reports.
+    Author: JumpCloud Solutions Architecture
+    SemanticVersion: 1.0.0
+    HomePageUrl: https://git.io/JJlrZ
+    SourceCodeUrl: https://git.io/JJiMo
+
+Resources:
+  ReportRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: A role for use in the JumpCloud Reports Serverless App
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSLambdaExecute
+      Policies:
+        - PolicyName: CloudWatchMetrics
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'cloudwatch:PutMetricData'
+                Resource: '*'
+  ReportBucket:
+    Type: AWS::S3::Bucket
+  ReportCmk:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: An Symmetric CMK for use in the JumpCloud Reports Serverless App
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: key-default-1
+        Statement:
+        - Sid: Enable IAM User Permissions
+          Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+          Action: kms:*
+          Resource: '*'
+        - Sid: Allow use of the key
+          Effect: Allow
+          Principal:
+            AWS: !GetAtt ReportRole.Arn
+          Action:
+          - kms:DescribeKey
+          - kms:Encrypt
+          - kms:Decrypt
+          - kms:ReEncrypt*
+          - kms:GenerateDataKey
+          - kms:GenerateDataKeyWithoutPlaintext
+          Resource: '*'
+  JcApiKey:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: JumpCloud API Key
+      SecretString: !Ref JumpCloudApiKey
+  SlackBotAccessToken:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: SlackBot Access Token
+      SecretString: !Ref BotUserAccessToken
+  JcApiResourcePolicy:
+    Type: AWS::SecretsManager::ResourcePolicy
+    Properties:
+      SecretId: !Ref JcApiKey
+      ResourcePolicy:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: !GetAtt ReportRole.Arn
+          Action: secretsmanager:GetSecretValue
+          Resource: "*"
+  BotResourcePolicy:
+    Type: AWS::SecretsManager::ResourcePolicy
+    Properties:
+      SecretId: !Ref SlackBotAccessToken
+      ResourcePolicy:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: !GetAtt ReportRole.Arn
+          Action: secretsmanager:GetSecretValue
+          Resource: "*"
+  ReportFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: report.zip
+      Handler: report.jc_generatereport
+      MemorySize: 192
+      Timeout: 180
+      Runtime: python3.7
+      Role: !GetAtt ReportRole.Arn
+      KmsKeyArn: !GetAtt ReportCmk.Arn
+      Environment:
+        Variables:
+          JcApiKeyArn: !Ref JcApiKey
+          botAccessTokenArn: !Ref SlackBotAccessToken
+          BucketName: !Ref ReportBucket
+          slackChannelId: !Sub ${slackChannelId}
