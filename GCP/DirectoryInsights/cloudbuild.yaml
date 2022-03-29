@@ -9,7 +9,7 @@ substitutions:
   _SERVICE_ACCOUNT_EMAIL: CHANGEVALUE #Service account with Cloud Functions Invoke permission
   _REGION_LOCATION: CHANGEVALUE #https://cloud.google.com/compute/docs/regions-zones
   _FUNCTIONS_SERVICE: CHANGEVALUE #'directory', 'radius', 'sso', 'systems', 'ldap', 'mdm', 'all'
-  _SCHEDULE_CRON_TIME: "<CHANGEVALUE>" #https://crontab.guru/
+  _SCHEDULE_CRON_TIME: "CHANGEVALUE" #https://crontab.guru/
   _SECRET_JC_API_KEY_NAME: CHANGEVALUE # Secret Manager JCAPIKEY Name
   _SECRET_JC_ORG_ID_NAME: CHANGEVALUE # # Secret Manager JCORGID Name
 
