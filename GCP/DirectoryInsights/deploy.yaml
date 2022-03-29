@@ -1,0 +1,54 @@
+substitutions:
+  _JC_API_KEY: CHANGEVALUE
+  _JC_ORG_ID: CHANGEVALUE
+  _GCP_PROJECT_ID: CHANGEVALUE # GCP project Id
+  _STORAGE_CLASS: CHANGEVALUE # Cloud Storage Class: standard, nearline, coldline, archive
+  _BUCKET_NAME: CHANGEVALUE # Cloud Storage Bucket Name. Must be unique
+  _FUNCTION_NAME: CHANGEVALUE # Cloud Functions Name
+  _SCHEDULE_NAME: CHANGEVALUE # Cloud Scheduler Name
+  _SERVICE_ACCOUNT_EMAIL: CHANGEVALUE #Service account with Cloud Functions Invoke permission
+  _REGION_LOCATION: CHANGEVALUE #https://cloud.google.com/compute/docs/regions-zones
+  _FUNCTIONS_SERVICE: CHANGEVALUE #'directory', 'radius', 'sso', 'systems', 'ldap', 'mdm', 'all'
+  _SCHEDULE_CRON_TIME: "<CHANGEVALUE>" #https://crontab.guru/
+  _SECRET_JC_API_KEY_NAME: CHANGEVALUE # Secret Manager JCAPIKEY Name
+  _SECRET_JC_ORG_ID_NAME: CHANGEVALUE # # Secret Manager JCORGID Name
+
+steps:
+#  # Create a Storage bucket
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  args: ['gsutil', 'mb' , '-p', '$_GCP_PROJECT_ID', '-c','$_STORAGE_CLASS', '-l', '$_REGION_LOCATION', 'gs://$_BUCKET_NAME']
+
+  # Create secret keys for JCAPIKEY and JCORGID
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: bash
+  args:
+    - -c
+    - |
+        printf "$_JC_API_KEY" | gcloud secrets create $_SECRET_JC_API_KEY_NAME --data-file=-
+        printf "$_JC_ORG_ID" | gcloud secrets create $_SECRET_JC_ORG_ID_NAME --data-file=-
+
+  # Deploy the script to GCP
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  args:
+    - gcloud
+    - functions
+    - deploy
+    - $_FUNCTION_NAME
+    - --region=$_REGION_LOCATION
+    - --entry-point=run_di
+    - --source=.
+    - --trigger-http
+    - --runtime=python39
+    - --set-secrets=jc_api_key=$_SECRET_JC_API_KEY_NAME:latest,jc_org_id=$_SECRET_JC_ORG_ID_NAME:latest
+    - --set-env-vars=cron_schedule=$_SCHEDULE_CRON_TIME,service=$_FUNCTIONS_SERVICE,bucket_name=$_BUCKET_NAME
+
+# Schedule
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: bash
+  args:
+    - -c
+    - |
+      functionsURL=$(gcloud functions describe $_FUNCTION_NAME --region=$_REGION_LOCATION --flatten=httpsTrigger.url)
+      url=$(echo ${functionsURL} | grep -Eo 'https?://[^ ")]+')
+      echo "URL: $url"
+      gcloud scheduler jobs create http $_SCHEDULE_NAME --location=$_REGION_LOCATION --schedule="$_SCHEDULE_CRON_TIME" --uri="$url" --http-method=GET --oidc-service-account-email="$_SERVICE_ACCOUNT_EMAIL"
