@@ -1,8 +1,7 @@
 jcapiv1 @ git+https://github.com/TheJumpCloud/jcapi-python.git@35661f1e0380f58dc706a1f151d0db9118c2e8e9#subdirectory=jcapiv1
 jcapiv2 @ git+https://github.com/TheJumpCloud/jcapi-python.git@35661f1e0380f58dc706a1f151d0db9118c2e8e9#subdirectory=jcapiv2
-python-dateutil==2.8.2
-requests==2.27.1
-google-cloud-storage==2.2.1
-urllib3==1.26.9
-croniter==1.3.4
+python-dateutil~=2.8.2
+requests~=2.27.1
+google-cloud-storage~=2.2.1
+croniter~=1.3.4
 

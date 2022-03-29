@@ -1,9 +1,9 @@
 # Gather JumpCloud Directory Insights Data with GCP Services
-_This document will walk a JumpCloud Administrator through deploying this Serverless Application manually. 
+_This document will walk a JumpCloud Administrator through deploying this Serverless Application to GCP. 
 
 _Note: This document assumes the use of Python 3.9
 ## Table of Contents
-- [Gather JumpCloud Directory Insights Data with an AWS Serverless Application](#gather-jumpcloud-directory-insights-data-with-an-aws-serverless-application)
+- [Gather JumpCloud Directory Insights Data with an GCP](#gather-jumpcloud-directory-insights-data-with-gcp-services)
   - [Table of Contents](#table-of-contents)
   - [Pre-requisites](#pre-requisites)
   - [Create Directory](#create-directory-to-store-directory-insights-files)
@@ -19,6 +19,7 @@ _Note: This document assumes the use of Python 3.9
     - Cloud Scheduler = Enabled
     - Secret Manager = Enabled
   - Cloud Build Service account email: admin access to services above
+  - JumpCloud administrator will need Cloud 
   
 ## Create Directory to Store Directory Insights Files
 
@@ -42,6 +43,7 @@ Using the GCLOUD CLI, you can [Cloud Build Deploy](https://cloud.google.com/sdk/
 ~/DirectoryInsights$ gcloud build submit
 ```
 _Note: `gcloud build submit` default config is "cloudbuild.yaml" which is why we do not need to specify `--config=config.yaml` tag
+_Note: `.gcloudignore` file excludes unwanted files/folders from getting push in the deploy process
 
 
 
