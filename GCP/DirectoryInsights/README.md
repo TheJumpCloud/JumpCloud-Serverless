@@ -1,7 +1,7 @@
-# Gather JumpCloud Directory Insights Data with an AWS Serverless Application
-_This document will walk a JumpCloud Administrator through packaging and deploying this Serverless Application manually. This workflow is intended for those who need to make modifications to the code or tie this solution into other AWS resources. If you would simply like to deploy this Serverless Application as-is, you can do so from the [Serverless Application Repository](https://serverlessrepo.aws.amazon.com/applications/us-east-2/339347137473/JumpCloud-DirectoryInsights)_
+# Gather JumpCloud Directory Insights Data with GCP Services
+_This document will walk a JumpCloud Administrator through deploying this Serverless Application manually. 
 
-_Note: This document assumes the use of Python 3+_
+_Note: This document assumes the use of Python 3.9
 ## Table of Contents
 - [Gather JumpCloud Directory Insights Data with an AWS Serverless Application](#gather-jumpcloud-directory-insights-data-with-an-aws-serverless-application)
   - [Table of Contents](#table-of-contents)
@@ -14,11 +14,11 @@ _Note: This document assumes the use of Python 3+_
 - [Your JumpCloud API key](https://docs.jumpcloud.com/2.0/authentication-and-authorization/authentication-and-authorization-overview)
 - [GCLOUD CLI installed](https://cloud.google.com/sdk/docs/install)
 - [Google Cloud Build](https://cloud.google.com/build/docs/securing-builds/configure-access-for-cloud-build-service-account)
-  - Permissions and access to create:
+  - Permissions:
     - Cloud Functions = Enabled
     - Cloud Scheduler = Enabled
     - Secret Manager = Enabled
-    - Cloud Build Service account email: admin access to services above
+  - Cloud Build Service account email: admin access to services above
   
 ## Create Directory to Store Directory Insights Files
 
@@ -35,7 +35,7 @@ In the root directory, edit cloudbuid.yaml file `substitutions` variable values 
 
 ## Deploying the Application
 
-<summary>GCloud CLI</summary>
+GCloud CLI
 
 Using the GCLOUD CLI, you can [Cloud Build Deploy](https://cloud.google.com/sdk/gcloud/reference/builds/submit) directly from the project directory
 ```bash
