@@ -40,7 +40,7 @@ steps:
     - --trigger-http
     - --runtime=python39
     - --set-secrets=jc_api_key=$_SECRET_JC_API_KEY_NAME:latest,jc_org_id=$_SECRET_JC_ORG_ID_NAME:latest
-    - --set-env-vars=cron_schedule=$_SCHEDULE_CRON_TIME,service=$_FUNCTIONS_SERVICE,bucket_name=$_BUCKET_NAME
+    - --set-env-vars=^:^cron_schedule=$_SCHEDULE_CRON_TIME:service=$_FUNCTIONS_SERVICE:bucket_name=$_BUCKET_NAME
 
 # Schedule
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'

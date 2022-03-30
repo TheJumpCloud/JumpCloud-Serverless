@@ -44,6 +44,7 @@ def jc_directory_insights():
         headers = {
             'x-api-key': jc_api_key,
             'content-type': "application/json",
+            'user-agent': 'JumpCloud_GCPServerless.DirectoryInsights/0.0.1'
         }
         if jc_org_id != '':
             headers['x-org-id'] = jc_org_id
@@ -64,13 +65,14 @@ def jc_directory_insights():
                 response.raise_for_status()
             except requests.exceptions.HTTPError as e:
                 raise Exception(e)
+
             response_body = json.loads(response.text)
             data = data + response_body
         final_data += data
+
     if len(final_data) == 0:
         return
     else:
-        print(final_data)
         outfile_name = "jc_directoryinsights_" + start_date + "_" + end_date + ".json"
         client = storage.Client()
         bucket = client.get_bucket(bucket_name)
