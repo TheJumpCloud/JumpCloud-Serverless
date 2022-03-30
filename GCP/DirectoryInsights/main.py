@@ -9,16 +9,17 @@ from google.cloud import storage
 def jc_directory_insights():
     try:
         jc_api_key = os.environ['jc_api_key']
-        cront_schedule = os.environ['cron_schedule']
-        service = os.environ['service']
+        cron_schedule = os.environ['cron_schedule']
+        service =  os.environ['service']
         jc_org_id = os.environ['jc_org_id']
         bucket_name = os.environ['bucket_name']
 
     except KeyError as e:
         raise Exception(e)
 
-    now = datetime.datetime.utcnow()
-    cron = croniter.croniter(cront_schedule, now)
+    date_now = datetime.datetime.utcnow()
+    now = date_now.replace(second=0, microsecond=0)
+    cron = croniter.croniter(cron_schedule, now)
     start_dt = cron.get_prev(datetime.datetime)
 
     start_date = start_dt.isoformat("T") + "Z"
@@ -83,8 +84,8 @@ def jc_directory_insights():
         )
 
 # Http function for GC Functions
-def run_di(requests):
-    requests_args = requests.args
+def run_di(tester):
+    requests_args = tester.args
 
     if requests_args and "message" in requests_args:
         message = requests_args["message"]
