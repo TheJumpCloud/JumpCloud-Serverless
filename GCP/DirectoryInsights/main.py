@@ -9,9 +9,9 @@ from google.cloud import storage
 def jc_directory_insights():
     try:
         jc_api_key = os.environ['jc_api_key']
+        jc_org_id = os.environ['jc_org_id']
         cron_schedule = os.environ['cron_schedule']
         service =  os.environ['service']
-        jc_org_id = os.environ['jc_org_id']
         bucket_name = os.environ['bucket_name']
 
     except KeyError as e:
@@ -84,12 +84,12 @@ def jc_directory_insights():
         )
 
 # Http function for GC Functions
-def run_di(tester):
-    requests_args = tester.args
+def run_di(httpRequest):
+    requests_args = httpRequest.args
 
     if requests_args and "message" in requests_args:
         message = requests_args["message"]
     else:
         jc_directory_insights()
-        message = 'Created log'
+        message = 'DI successfully ran'
     return message
