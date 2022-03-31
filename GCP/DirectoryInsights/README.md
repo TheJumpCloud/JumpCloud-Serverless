@@ -32,7 +32,7 @@ Install the dependencies in requirements.txt file
 
 ## Edit CloudBuild.yaml
 
-In the root directory, edit cloudbuid.yaml file `substitutions` variable values with the necessary credentials
+In the root directory, edit cloudbuid.yaml file `substitutions` variable values `CHANGEVALUE` with the necessary credentials
 
 ## Deploying the Application
 
@@ -42,7 +42,7 @@ Using the GCLOUD CLI, you can [Cloud Build Deploy](https://cloud.google.com/sdk/
 ```bash
 ~/DirectoryInsights$ gcloud builds submit
 ```
-_Note: `gcloud build submit` default config is "cloudbuild.yaml" which is why we do not need to specify `--config=config.yaml` tag_
+_Note: `gcloud builds submit` default config is "cloudbuild.yaml" which is why we do not need to specify `--config=config.yaml` tag_
 _Note: `.gcloudignore` file excludes unwanted files/folders from getting push in the deploy process_
 
 
