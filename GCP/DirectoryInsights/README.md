@@ -34,7 +34,6 @@ Install the dependencies in requirements.txt file
 
 In the root directory, edit cloudbuid.yaml file `substitutions` variable values with the necessary credentials
 
-
 ## Deploying the Application
 
 GCloud CLI
