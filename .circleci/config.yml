@@ -6,14 +6,10 @@ workflows:
   test_and_deploy:
     jobs:
       - zip_script
-      - sam/deploy:
-          requires:
+      - package_script:
+          requires: 
             - zip_script
-          context: sa-jc-aws-creds-context
-          name: deploy-staging
-          s3-bucket: jc-circleci-test-bucket
-          stack-name: jc-ken-circleci-test-stack
-          template: ./AWS/DirectoryInsights/serverless.yaml
+      
 
 # Deploy test 
 jobs:
@@ -32,3 +28,16 @@ jobs:
           root: .
           paths:
             - .
+
+  package_script:
+    docker:
+      - image: circleci/aws-sam-serverless
+    steps:
+      - attach_workspace:
+          at: .
+      - sam/deploy:
+            context: sa-jc-aws-creds-context
+            name: deploy-staging
+            s3-bucket: jc-circleci-test-bucket
+            stack-name: jc-ken-circleci-test-stack
+            template: ./AWS/DirectoryInsights/serverless.yaml
