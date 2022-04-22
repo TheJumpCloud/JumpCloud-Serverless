@@ -10,8 +10,7 @@ workflows:
       - build_and_package:
           requires:
             - zip_script
-          
-      
+          context: sa-jc-aws-creds-context
 
 # Deploy test 
 jobs:
