@@ -23,8 +23,8 @@ jobs:
       - image: circleci/python:3.9
     steps:
       - checkout
-      # - run: sudo pip3 install boto3 --target=./AWS/DirectoryInsights
-      # - run: sudo pip3 install requests --target=./AWS/DirectoryInsights
+      - run: sudo pip3 install boto3 --target=./AWS/DirectoryInsights
+      - run: sudo pip3 install requests --target=./AWS/DirectoryInsights
       #- run: ls ./AWS/DirectoryInsights
       - run: zip -r ./AWS/DirectoryInsights/get-jcdirectoryinsights.zip ./AWS/DirectoryInsights 
       - run: ls ./AWS/DirectoryInsights/
