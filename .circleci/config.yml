@@ -1,19 +1,18 @@
 version: 2.1
 orbs:
-  sam: circleci/aws-sam-serverless@3.0
   aws-cli: circleci/aws-cli@3.1
-  # Create bucket
+  sam: circleci/aws-sam-serverless@3.0
 workflows:
   test_and_deploy:
     jobs:
       - zip_script
-      - package_script:
-          requires:
-            - zip_script
+      - sam/deploy:
+          context: sa-jc-aws-creds-context
+          name: deploy-staging
+          s3-bucket: jc-circleci-test-bucket
+          stack-name: jc-ken-circleci-test-stack
+          template: ./AWS/DirectoryInsights/serverless.yaml
 
-
-
-# Create sam template
 # Deploy test 
 jobs:
   # Create zip of script 
@@ -30,41 +29,3 @@ jobs:
           root: .
           paths:
             - .
-      - run: ls
-  # Package script
-  package_script:
-    executor: sam/default
-    steps:
-      - checkout
-      - sam/install
-      - run: sam build
-      - run: sam package --template-file ./AWS/DirectoryInsights/serverless.yaml --output-template-file packaged.yaml --s3-bucket jc-circleci-test-bucket
-
-  
-
-
-
-                  
-   
-  
-
-
-# version: 2.1
-# orbs:
-#   aws-cli: circleci/aws-cli@3.1
-# jobs:
-#   aws-cli-cred-setup:
-#     
-#     steps:
-#       - aws-cli/setup:
-#           aws-access-key-id: AWS_ACCESS_KEY
-#           aws-secret-access-key: AWS_ACCESS_SECRET
-#           aws-region: AWS_REGION_NAME
-#       - run: 
-#           name: Check AWS Profile
-#           command: |
-#             aws configure list
-# workflows:
-#   aws-cli:
-#     jobs:
-#       - aws-cli-cred-setup
