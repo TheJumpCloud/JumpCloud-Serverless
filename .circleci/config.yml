@@ -7,6 +7,8 @@ workflows:
     jobs:
       - zip_script
       - sam/deploy:
+          requires:
+            - zip_script
           context: sa-jc-aws-creds-context
           name: deploy-staging
           s3-bucket: jc-circleci-test-bucket
