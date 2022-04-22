@@ -1,21 +1,20 @@
 version: 2.1
 orbs:
-  sam: circleci/aws-sam-serverless@3.0
+  aws-cli: circleci/aws-cli@2.0
 jobs:
-  test_my_api:
-    docker:
-      - image: 'cimg/node:lts'
+  aws-cli-cred-setup:
+    executor: aws-cli/default
     steps:
-      - run: echo "Run your API tests here"
+      - aws-cli/setup:
+          aws-access-key-id: AWS_ACCESS_KEY
+          aws-secret-access-key: AWS_ACCESS_SECRET
+          aws-region: AWS_REGION_NAME
+      - run: 
+          name: Check AWS Profile
+          command: |
+            aws configure list
 workflows:
-  test_and_deploy:
+  aws-cli:
     jobs:
-      - sam/deploy:
-          context: aws-credentials-context
-          name: deploy-staging
-          s3-bucket: my-s3-bucket
-          stack-name: staging-stack
-          template: ./AWS/DirectoryInsights/serverless.yaml
-      - test_my_api:
-          requires:
-            - deploy-staging
+      - aws-cli-cred-setup:
+          context: aws
