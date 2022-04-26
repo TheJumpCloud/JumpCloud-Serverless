@@ -43,7 +43,7 @@ jobs:
       - run:
           name: Setup Tests
           command: |
-            python3 test/AWS/DirectoryInisights/create_temp_jcdirectoryinsights.py
+            python3 test/AWS/DirectoryInisights/create_temp_jcdirectoryinsights.py '"$JC_API_KEY"'
       - run:
           name: Run Tests
           command: |

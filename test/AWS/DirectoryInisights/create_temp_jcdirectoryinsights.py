@@ -1,9 +1,10 @@
 import shutil
 import os
 from pathlib import Path
+import sys
 
 
-def create_temp():
+def create_temp(api_key):
 
     pwd = os.path.dirname(os.path.realpath(__file__))
     path = Path(pwd)
@@ -13,7 +14,7 @@ def create_temp():
     with open(pwd + "/temp_get-jcdirectoryinsights.py", 'r') as file :
         file_data = file.read()
         # Replace the target lines
-        file_data = file_data.replace("os.environ['JcApiKeyArn']", "os.environ['JC_API_KEY']")
+        file_data = file_data.replace("os.environ['JcApiKeyArn']", api_key)
         file_data = file_data.replace("def jc_directoryinsights(event, context):", 'def jc_directoryinsights():')
         file_data = file_data.replace("bucketName = os.environ['BucketName']", '#bucketName = os.environ[\'BucketName\']')
         file_data = file_data.replace("get_secret(jcapikeyarn)", 'jcapikeyarn')
@@ -33,4 +34,4 @@ def create_temp():
         file.write('\n\njc_directoryinsights()')
 
 if __name__ == "__main__":
-    create_temp()
+    create_temp(sys.argv[1])
