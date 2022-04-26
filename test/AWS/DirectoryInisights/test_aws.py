@@ -7,17 +7,12 @@ import subprocess
 import urllib.request
 import re
 from re import search
+from pathlib import Path
+
 
 def run_subproc(cmd):
     sp = subprocess.run(['python3', cmd], stdout=subprocess.PIPE, text=True)
     return sp.stdout
-# content of test_sample.py
-def func(x):
-    return x + 1
-
-
-def test_answer():
-    assert func(3) == 4
 
 def test_script_produces_output_with_all_services():
     pwd = os.path.dirname(os.path.realpath(__file__))
@@ -66,6 +61,9 @@ def test_json_contents_for_all_services():
 #         os.remove(file)
 
 def test_changelog_version():
+    pwd = os.path.dirname(os.path.realpath(__file__))
+    path = Path(pwd)
+    print(str(path.parent.parent.parent.absolute()) + '/AWS/DirectoryInsights/CHANGELOG.md')
     # get latest version from GitHub
     URL = "https://raw.githubusercontent.com/TheJumpCloud/JumpCloud-Serverless/master/AWS/DirectoryInsights/CHANGELOG.md"
     file = urllib.request.urlopen(URL)
@@ -77,7 +75,7 @@ def test_changelog_version():
             latestVersion = (latestVersionText[latestVersionText.find("[")+1:latestVersionText.find("]")])
             break
     # get the version from this branch
-    with open('/Users/jworkman/Documents/GitHub/JumpCloud-Serverless/AWS/DirectoryInsights/CHANGELOG.md') as f: 
+    with open(str(path.parent.parent.parent.absolute()) + '/AWS/DirectoryInsights/CHANGELOG.md') as f: 
         lines = f.readlines()
     for line in lines:
         # print(line)
@@ -86,7 +84,7 @@ def test_changelog_version():
             latestVersionBranch = (latestVersionBranchText[latestVersionBranchText.find("[")+1:latestVersionBranchText.find("]")])
             break
     # get the user agent version from this branch:
-    with open('/Users/jworkman/Documents/GitHub/JumpCloud-Serverless/AWS/DirectoryInsights/get-jcdirectoryinsights.py') as u:
+    with open(str(path.parent.parent.parent.absolute()) + '/AWS/DirectoryInsights/get-jcdirectoryinsights.py') as u:
         scriptLines = u.readlines()
     for scriptLine in scriptLines:
         # print(scriptLine)
