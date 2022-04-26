@@ -20,7 +20,6 @@ def test_script_produces_output_with_all_services():
     print("running file...")
     print(pwd + "/temp_get-jcdirectoryinsights.py")
     # Set Variables:
-    os.environ['JC_API_KEY'] = "$JC_API_KEY"
     os.environ['incrementType'] = "day"
     os.environ['incrementAmount'] = "1"
     os.environ['service'] = 'all'
