@@ -47,6 +47,8 @@ jobs:
       - run:
           name: Run Tests
           command: |
+            import os
+            os.environ['JC_API_KEY'] = "$JC_API_KEY"
             pytest -rpP
   build_and_package:
     executor: sam/default
