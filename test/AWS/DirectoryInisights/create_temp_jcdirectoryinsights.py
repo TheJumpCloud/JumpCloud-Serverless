@@ -14,7 +14,7 @@ def create_temp(api_key):
     with open(pwd + "/temp_get-jcdirectoryinsights.py", 'r') as file :
         file_data = file.read()
         # Replace the target lines
-        file_data = file_data.replace("os.environ['JcApiKeyArn']", api_key)
+        file_data = file_data.replace("os.environ['JcApiKeyArn']", "'" + api_key + "'")
         file_data = file_data.replace("def jc_directoryinsights(event, context):", 'def jc_directoryinsights():')
         file_data = file_data.replace("bucketName = os.environ['BucketName']", '#bucketName = os.environ[\'BucketName\']')
         file_data = file_data.replace("get_secret(jcapikeyarn)", 'jcapikeyarn')
