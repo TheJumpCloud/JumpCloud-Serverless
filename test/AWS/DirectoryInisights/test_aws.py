@@ -23,24 +23,24 @@ def test_script_produces_output_with_all_services():
     pwd = os.path.dirname(os.path.realpath(__file__))
 
     print("running file...")
-    print(pwd + "/get-jcdirectoryinsights.py")
+    print(pwd + "/temp_get-jcdirectoryinsights.py")
     # Set Variables:
     os.environ['incrementType'] = "day"
     os.environ['incrementAmount'] = "1"
     os.environ['service'] = 'all'
     os.environ['OrgId'] = '5a4bff7ab17d0c9f63bcd277'
     # End Variables
-    run_subproc(pwd + "/get-jcdirectoryinsights.py")
-    files = glob.glob("jc_directoryinsights*.json.gz")
+    run_subproc(pwd + "/temp_get-jcdirectoryinsights.py")
+    files = glob.glob(pwd + "/jc_directoryinsights*.json.gz")
     for file in files:
-        print(pwd + "/" + file)
-        assert os.path.exists(pwd + "/" + file)
+        print("found File: " + file)
+        assert os.path.exists(file)
 
 
 def test_json_contents_for_all_services():
-    pwd = os.getcwd()
-    files = glob.glob("jc_directoryinsights*.json.gz")
-    with gzip.open(pwd + "/" + files[0], 'r') as f:
+    pwd = os.path.dirname(os.path.realpath(__file__))
+    files = glob.glob(pwd + "/jc_directoryinsights*.json.gz")
+    with gzip.open(files[0], 'r') as f:
         data = f.read()
         j = json.loads (data.decode('utf-8'))
     # non empty json
@@ -75,7 +75,6 @@ def test_changelog_version():
         if decoded_line.startswith('##'):
             latestVersionText = decoded_line
             latestVersion = (latestVersionText[latestVersionText.find("[")+1:latestVersionText.find("]")])
-            print(decoded_line)
             break
     # get the version from this branch
     with open('/Users/jworkman/Documents/GitHub/JumpCloud-Serverless/AWS/DirectoryInsights/CHANGELOG.md') as f: 
@@ -93,11 +92,12 @@ def test_changelog_version():
         # print(scriptLine)
         if search('user-agent', scriptLine):
             useragent = scriptLine
-            print(useragent)
-            latestVersionUserAent = re.search(r'DirectoryInsights/([\d.]+)', useragent).group(1)
-
+            latestUserAgentFromBranch = re.search(r'DirectoryInsights/([\d.]+)', useragent).group(1)
             break
     print('latest version from GitHub: ' + latestVersion)
     print('latest version from this Branch: ' + latestVersionBranch)
-    print('useragent version from this Branch: ' + latestVersionUserAent)
+    print('useragent version from this Branch: ' + latestUserAgentFromBranch)
+    # Latest version should not be the same as the latest version from Branch
     assert latestVersion != latestVersionBranch
+    # Latest version from branch should be updated in all places
+    assert latestUserAgentFromBranch == latestVersionBranch
