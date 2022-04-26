@@ -23,7 +23,7 @@ def test_script_produces_output_with_all_services():
     os.environ['incrementType'] = "day"
     os.environ['incrementAmount'] = "1"
     os.environ['service'] = 'all'
-    os.environ['OrgId'] = '5a4bff7ab17d0c9f63bcd277'
+    os.environ['OrgId'] = '5ebeb8c7de6f1e713e19cfba'
     # End Variables
     run_subproc(pwd + "/temp_get-jcdirectoryinsights.py")
     files = glob.glob(pwd + "/jc_directoryinsights*.json.gz")
