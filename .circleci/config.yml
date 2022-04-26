@@ -7,14 +7,15 @@ workflows:
 
     jobs:
       - zip_script
+      - build_and_test
       - build_and_package:
           requires:
             - zip_script
           context: sa-jc-aws-creds-context
 
-# Deploy test 
+# Deploy test
 jobs:
-  # Create zip of script 
+  # Create zip of script
   zip_script:
     docker:
       - image: circleci/python:3.9
@@ -23,12 +24,30 @@ jobs:
       - run: sudo pip3 install boto3 --target=./AWS/DirectoryInsights
       - run: sudo pip3 install requests --target=./AWS/DirectoryInsights
       #- run: ls ./AWS/DirectoryInsights
-      - run: zip -r ./AWS/DirectoryInsights/get-jcdirectoryinsights.zip ./AWS/DirectoryInsights 
+      - run: zip -r ./AWS/DirectoryInsights/get-jcdirectoryinsights.zip ./AWS/DirectoryInsights
       - run: ls ./AWS/DirectoryInsights/
       - persist_to_workspace:
           root: .
           paths:
             - .
+  build_and_test:
+    docker:
+      - image: circleci/python:3.9
+    steps:
+      - checkout
+      - run:
+          name: Setup Dependencies
+          command: |
+            pip3 install pytest
+            pip3 install boto3
+      - run:
+          name: Setup Tests
+          command: |
+            python3 test/AWS/DirectoryInisights/create_temp_jcdirectoryinsights.py
+      - run:
+          name: Run Tests
+          command: |
+            pytest -rpP
   build_and_package:
     executor: sam/default
     steps:
