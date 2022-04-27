@@ -17,6 +17,7 @@ workflows:
       - deploy_to_aws_serverless_repo:
           requires:
             - zip_script
+            - build_and_package
             # - build_and_test
           context: sa-jc-aws-creds-context
 
@@ -65,18 +66,21 @@ jobs:
           command: |
             pytest -rpP
   
-deploy_to_aws_serverless_repo:
+  deploy_to_aws_serverless_repo:
     executor: sam/default
-    when:
-      condition:
-        or:
-          - equal: [ sa-2345-aws-serverless-ci-test, << pipeline.git.branch >> ]
-      steps:
-        - attach_workspace:
-            at: .
-        - sam/install
-        - run:
-            command: sam publish --template ./AWS/DirectoryInsights/packaged.yaml --region us-east-2
+    steps:
+      - when:
+          condition:
+            or:
+              - equal: [ sa-2345-aws-serverless-ci-test, << pipeline.git.branch >> ]
+          steps:
+            - attach_workspace:
+                at: .
+            - sam/install
+            - run:
+                command: sam publish --template ./AWS/DirectoryInsights/packaged.yaml --region us-east-2
+
+
 
 
 
