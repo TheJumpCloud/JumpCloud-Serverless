@@ -4,13 +4,20 @@ orbs:
   sam: circleci/aws-sam-serverless@3.2.0
 workflows:
   test_and_deploy:
-
     jobs:
-      - zip_script
       - build_and_test
+      - zip_script
+          # requires:
+          #   - build_and_test
       - build_and_package:
           requires:
             - zip_script
+            # - build_and_test
+          context: sa-jc-aws-creds-context
+      - deploy_to_aws_serverless_repo:
+          requires:
+            - zip_script
+            # - build_and_test
           context: sa-jc-aws-creds-context
 
 # Deploy test
@@ -23,13 +30,22 @@ jobs:
       - checkout
       - run: sudo pip3 install boto3 --target=./AWS/DirectoryInsights
       - run: sudo pip3 install requests --target=./AWS/DirectoryInsights
-      #- run: ls ./AWS/DirectoryInsights
       - run: zip -r ./AWS/DirectoryInsights/get-jcdirectoryinsights.zip ./AWS/DirectoryInsights
       - run: ls ./AWS/DirectoryInsights/
       - persist_to_workspace:
           root: .
           paths:
             - .
+
+  build_and_package:
+    executor: sam/default
+    steps:
+      - attach_workspace:
+          at: .
+      - sam/install
+      - run:
+          command: sam package --template-file ./AWS/DirectoryInsights/serverless.yaml --output-template-file ./AWS/DirectoryInsights/packaged.yaml --s3-bucket jc-circleci-test-bucket
+
   build_and_test:
     docker:
       - image: circleci/python:3.9
@@ -48,13 +64,19 @@ jobs:
           name: Run Tests
           command: |
             pytest -rpP
-  build_and_package:
+  
+deploy_to_aws_serverless_repo:
     executor: sam/default
-    steps:
-      - attach_workspace:
-          at: .
-      - sam/install
-      - run:
-          command: sam package --template-file ./AWS/DirectoryInsights/serverless.yaml --output-template-file ./AWS/DirectoryInsights/packaged.yaml --s3-bucket jc-circleci-test-bucket
+    when:
+      condition:
+        or:
+          - equal: [ sa-2345-aws-serverless-ci-test, << pipeline.git.branch >> ]
+      steps:
+        - attach_workspace:
+            at: .
+        - sam/install
+        - run:
+            command: sam publish --template ./AWS/DirectoryInsights/packaged.yaml --region us-east-2
+
 
 
