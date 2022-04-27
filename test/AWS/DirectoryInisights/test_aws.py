@@ -78,7 +78,7 @@ def test_json_contents_for_all_services():
         # remove file for next test
         os.remove(file)
 
-def test_json_again():
+def test_json_directory_service_only():
     os.environ['incrementType'] = "day"
     os.environ['incrementAmount'] = "1"
     os.environ['service'] = 'directory'
