@@ -6,19 +6,19 @@ workflows:
   test_and_deploy:
     jobs:
       - build_and_test
-      - zip_script
-          # requires:
-          #   - build_and_test
+      - zip_script:
+          requires:
+            - build_and_test
       - build_and_package:
           requires:
             - zip_script
-            # - build_and_test
+            - build_and_test
           context: sa-jc-aws-creds-context
       - deploy_to_aws_serverless_repo:
           requires:
             - zip_script
             - build_and_package
-            # - build_and_test
+            - build_and_test
           context: sa-jc-aws-creds-context
 
 # Deploy test
@@ -65,14 +65,14 @@ jobs:
           name: Run Tests
           command: |
             pytest -rpP
-  
+
   deploy_to_aws_serverless_repo:
     executor: sam/default
     steps:
       - when:
           condition:
             or:
-              - equal: [ sa-2345-aws-serverless-ci-test, << pipeline.git.branch >> ]
+              - equal: [ master, << pipeline.git.branch >> ]
           steps:
             - attach_workspace:
                 at: .
