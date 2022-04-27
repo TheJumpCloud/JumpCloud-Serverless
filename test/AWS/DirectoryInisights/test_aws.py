@@ -88,6 +88,9 @@ def test_json_again():
     print(pwd + "/get-jcdirectoryinsights.py")
     run_subproc(pwd + "/get-jcdirectoryinsights.py")
     files = glob.glob(pwd + "/jc_directoryinsights*.json.gz")
+    with gzip.open(files[0], 'r') as f:
+        data = f.read()
+        j = json.loads (data.decode('utf-8'))
     for i in j:
         assert i['service'] == 'directory'
     for file in files:
