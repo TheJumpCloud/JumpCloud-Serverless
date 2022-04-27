@@ -43,6 +43,10 @@ jobs:
     steps:
       - attach_workspace:
           at: .
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
       - sam/install
       - run:
           command: sam package --template-file ./AWS/DirectoryInsights/serverless.yaml --output-template-file ./AWS/DirectoryInsights/packaged.yaml --s3-bucket jc-circleci-test-bucket
