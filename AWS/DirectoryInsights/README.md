@@ -41,7 +41,7 @@ _Note: This document assumes the use of Python 3+_
       ]
     }
     ```
-  
+
 ## Create Python Script
 
 Create a directory to store your Serverless Application and any dependencies required. In the root of that directory create your [Python Script](https://github.com/TheJumpCloud/JumpCloud-Serverless/blob/master/AWS/DirectoryInsights/get-jcdirectoryinsights.py).
