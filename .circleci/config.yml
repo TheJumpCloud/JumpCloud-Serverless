@@ -80,8 +80,7 @@ jobs:
     steps:
       - when:
           condition:
-            or:
-              - equal: [master, << pipeline.git.branch >> ]
+            equal: [ sa-2345-aws-serverless-ci-test  , << pipeline.git.branch >> ]
           steps:
             - attach_workspace:
                 at: .
