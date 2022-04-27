@@ -29,10 +29,14 @@ jobs:
       - image: circleci/python:3.9
     steps:
       - checkout
-      - run: sudo pip3 install boto3 --target=./AWS/DirectoryInsights
-      - run: sudo pip3 install requests --target=./AWS/DirectoryInsights
-      - run: zip -r ./AWS/DirectoryInsights/get-jcdirectoryinsights.zip ./AWS/DirectoryInsights
-      - run: ls ./AWS/DirectoryInsights/
+      - run:
+          name: Setup Dependencies
+          command: |
+            sudo pip3 install boto3 --target=./AWS/DirectoryInsights
+            sudo pip3 install requests --target=./AWS/DirectoryInsights
+      - run: 
+          name: Zip Files
+          command: zip -r ./AWS/DirectoryInsights/get-jcdirectoryinsights.zip ./AWS/DirectoryInsights
       - persist_to_workspace:
           root: .
           paths:
@@ -43,13 +47,14 @@ jobs:
     steps:
       - attach_workspace:
           at: .
+      - sam/install
+      - run:
+          name: Package Template
+          command: sam package --template-file ./AWS/DirectoryInsights/serverless.yaml --output-template-file ./AWS/DirectoryInsights/packaged.yaml --s3-bucket jc-circleci-test-bucket
       - persist_to_workspace:
           root: .
           paths:
             - .
-      - sam/install
-      - run:
-          command: sam package --template-file ./AWS/DirectoryInsights/serverless.yaml --output-template-file ./AWS/DirectoryInsights/packaged.yaml --s3-bucket jc-circleci-test-bucket
 
   build_and_test:
     docker:
@@ -82,6 +87,7 @@ jobs:
                 at: .
             - sam/install
             - run:
+                name: Publish to AWS Serverless Repository
                 command: sam publish --template ./AWS/DirectoryInsights/packaged.yaml --region us-east-2
 
 
