@@ -86,7 +86,7 @@ def test_json_again():
     pwd = os.path.dirname(os.path.realpath(__file__))
     print("running file...")
     print(pwd + "/get-jcdirectoryinsights.py")
-    run_subproc(pwd + "/get-jcdirectoryinsights.py")
+    run_subproc(pwd + "/temp_get-jcdirectoryinsights.py")
     files = glob.glob(pwd + "/jc_directoryinsights*.json.gz")
     with gzip.open(files[0], 'r') as f:
         data = f.read()
@@ -94,7 +94,7 @@ def test_json_again():
     for i in j:
         assert i['service'] == 'directory'
     for file in files:
-        assert os.path.exists(pwd + "/" + file)
+        assert os.path.exists(file)
         # remove file for next test
         os.remove(file)
 
