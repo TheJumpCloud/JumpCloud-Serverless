@@ -24,6 +24,7 @@ workflows:
     when:
       and:
         - equal: [master, << pipeline.git.branch >>]
+        - equal: [true, << pipeline.parameters.AWSModified >>]
     jobs:
       - build_and_test
       - zip_script:
