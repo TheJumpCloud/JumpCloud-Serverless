@@ -1,0 +1,112 @@
+version: 2.1
+parameters:
+  AWSModified:
+    description: 'Used by Path Filtering Orb to determine if changes occurred in the /AWS/ directory'
+    type: boolean
+    default: false
+orbs:
+  aws-cli: circleci/aws-cli@3.1
+  sam: circleci/aws-sam-serverless@3.2.0
+workflows:
+  test_aws_directory_insights:
+    when:
+      and:
+        - and:
+            - not:
+                matches:
+                  pattern: "^master$"
+                  value: << pipeline.git.branch >>
+        - or:
+            - equal: [true, << pipeline.parameters.AWSModified >>]
+    jobs:
+      - build_and_test
+  build_and_deploy_aws_directory_insights:
+    when:
+      and:
+        - equal: [master, << pipeline.git.branch >>]
+        - equal: [true, << pipeline.parameters.AWSModified >>]
+    jobs:
+      - build_and_test
+      - zip_script:
+          requires:
+            - build_and_test
+      - build_and_package:
+          requires:
+            - zip_script
+            - build_and_test
+          context: sa-jc-aws-creds-context
+      - deploy_to_aws_serverless_repo:
+          requires:
+            - zip_script
+            - build_and_package
+            - build_and_test
+          context: sa-jc-aws-creds-context
+
+# Deploy test
+jobs:
+  # Create zip of script
+  zip_script:
+    docker:
+      - image: circleci/python:3.9
+    steps:
+      - checkout
+      - run:
+          name: Setup Dependencies
+          command: |
+            sudo pip3 install boto3 --target=./AWS/DirectoryInsights
+            sudo pip3 install requests --target=./AWS/DirectoryInsights
+      - run:
+          name: Zip Files
+          command: zip -r ./AWS/DirectoryInsights/get-jcdirectoryinsights.zip ./AWS/DirectoryInsights
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+
+  build_and_package:
+    executor: sam/default
+    steps:
+      - attach_workspace:
+          at: .
+      - sam/install
+      - run:
+          name: Package Template
+          command: sam package --template-file ./AWS/DirectoryInsights/serverless.yaml --output-template-file ./AWS/DirectoryInsights/packaged.yaml --s3-bucket jc-circleci-test-bucket
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+
+  build_and_test:
+    docker:
+      - image: circleci/python:3.9
+    steps:
+      - checkout
+      - run:
+          name: Setup Dependencies
+          command: |
+            pip3 install pytest
+            pip3 install boto3
+      - run:
+          name: Setup Tests
+          command: |
+            python3 test/AWS/DirectoryInisights/create_temp_jcdirectoryinsights.py $JC_API_KEY
+      - run:
+          name: Run Tests
+          command: |
+            pytest -rpP
+
+  deploy_to_aws_serverless_repo:
+    executor: sam/default
+    steps:
+      - attach_workspace:
+          at: .
+      - sam/install
+      - run:
+          name: Publish to AWS Serverless Repository
+          command: sam publish --template ./AWS/DirectoryInsights/packaged.yaml --region us-east-2
+
+
+
+
+
