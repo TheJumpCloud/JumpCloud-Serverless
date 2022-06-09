@@ -46,6 +46,13 @@ def jc_directoryinsights(event, context):
             raise Exception(f"Error - Service List contains 'all' and additional services : {serviceList}")
     finalData = []
 
+    if len(serviceList) > 1:
+        for service in serviceList:
+            print (f'service: {service},\n start-date: {start_date},\n end-date: {end_date},\n *** Powershell Script *** \n $sourcePath =  "<path_to_json_results>" \n Get-JCEvent -service {service} -StartTime {start_date} -EndTime {end_date} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
+    else: 
+        for service in serviceList:
+            print (f'service: {service},\n start-date: {start_date},\n end-date: {end_date},\n *** Powershell Script *** \n $sourcePath =  "<path_to_json_results>" \n Get-JCEvent -service {service} -StartTime {start_date} -EndTime {end_date} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
+            
     for service in serviceList:
         url = "https://api.jumpcloud.com/insights/directory/v1/events"
         body = {
@@ -91,6 +98,7 @@ def jc_directoryinsights(event, context):
             )
             continue
         data = responseBody
+            
         while (response.headers["X-Result-Count"] >= response.headers["X-Limit"]):
             body["search_after"] = json.loads(response.headers["X-Search_After"])
             response = requests.post(url, json=body, headers=headers)
@@ -101,6 +109,7 @@ def jc_directoryinsights(event, context):
             responseBody = json.loads(response.text)
             data = data + responseBody
         finalData += data
+        
     if len(finalData) == 0:
         return
     finalData.sort(key = lambda x:x['timestamp'], reverse=True)

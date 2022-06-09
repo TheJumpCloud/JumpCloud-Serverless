@@ -1,7 +1,11 @@
 # Changelog
+## [1.2.1] - 2022-06-13
 
-All notable changes to the AWS Directory Insights Serverless App will be documented in this file.
+### Added
 
+- Added CloudWatch logging that includes service/s, timestamps, and Powershell Script
+  - Powershell script can be used to manually run queries in case of timeouts or errors
+- Changed Python runtime from version 3.7 to 3.9
 ## [1.2.0] - 2022-01-12
 
 ### Added

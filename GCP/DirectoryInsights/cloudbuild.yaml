@@ -1,12 +1,12 @@
 substitutions:
-  # Note: No quotations needed for the variable values, except for _SCHEDULE_CRON_TIME
+  # Note: No quotations needed for the variable values, except for _SCHEDULE_CRON_TIME and _GCP_PROJECT_ID
 
   _JC_API_KEY: CHANGEVALUE # JC API key
   _JC_ORG_ID: CHANGEVALUE # JC ORG id
   # JC Services: directory, radius, sso, systems, ldap, mdm
   # Can accept multiple values' for example:  _JC_SERVICE: directory,systems or gather logs from all services with the _JC_SERVICE: all
   _JC_SERVICE: CHANGEVALUE
-  _GCP_PROJECT_ID: CHANGEVALUE # GCP project Id
+  _GCP_PROJECT_ID: "CHANGEVALUE" # GCP project Id
   _STORAGE_CLASS: CHANGEVALUE # Cloud Storage Class: standard, nearline, coldline, archive
   _BUCKET_NAME: CHANGEVALUE # Cloud Storage Bucket Name. Must be unique
   _FUNCTION_NAME: CHANGEVALUE # Cloud Functions Name
