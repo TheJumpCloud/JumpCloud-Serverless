@@ -1,4 +1,4 @@
-import requests, datetime, json, boto3, os, gzip
+import requests, datetime, json, boto3, os, gzip, logging
 from botocore.exceptions import ClientError
 
 def get_secret(secret_name):
@@ -11,6 +11,8 @@ def get_secret(secret_name):
     return secret
 
 def jc_directoryinsights(event, context):
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
     try:
         jcapikeyarn = os.environ['JcApiKeyArn']
         incrementType = os.environ['incrementType']
@@ -48,10 +50,10 @@ def jc_directoryinsights(event, context):
 
     if len(serviceList) > 1:
         for service in serviceList:
-            print (f'service: {service},\n start-date: {start_date},\n end-date: {end_date},\n *** Powershell Script *** \n $sourcePath =  "<path_to_json_results>" \n Get-JCEvent -service {service} -StartTime {start_date} -EndTime {end_date} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
+            logger.info(f'service: {service},\n start-date: {start_date},\n end-date: {end_date},\n *** Powershell Script *** \n $sourcePath =  "<path_to_json_results>" \n Get-JCEvent -service {service} -StartTime {start_date} -EndTime {end_date} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
     else: 
         for service in serviceList:
-            print (f'service: {service},\n start-date: {start_date},\n end-date: {end_date},\n *** Powershell Script *** \n $sourcePath =  "<path_to_json_results>" \n Get-JCEvent -service {service} -StartTime {start_date} -EndTime {end_date} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
+            logger.info(f'service: {service},\n start-date: {start_date},\n end-date: {end_date},\n *** Powershell Script *** \n $sourcePath =  "<path_to_json_results>" \n Get-JCEvent -service {service} -StartTime {start_date} -EndTime {end_date} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
             
     for service in serviceList:
         url = "https://api.jumpcloud.com/insights/directory/v1/events"
