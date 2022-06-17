@@ -1,4 +1,4 @@
-import requests, datetime, json, boto3, os, gzip
+import requests, datetime, json, boto3, os, gzip, logging
 from botocore.exceptions import ClientError
 
 def get_secret(secret_name):
@@ -11,6 +11,8 @@ def get_secret(secret_name):
     return secret
 
 def jc_directoryinsights(event, context):
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
     try:
         jcapikeyarn = os.environ['JcApiKeyArn']
         incrementType = os.environ['incrementType']
@@ -46,6 +48,12 @@ def jc_directoryinsights(event, context):
             raise Exception(f"Error - Service List contains 'all' and additional services : {serviceList}")
     finalData = []
 
+    if len(serviceList) > 1:
+        for service in serviceList:
+            logger.info(f'service: {service},\n start-date: {start_date},\n end-date: {end_date},\n *** Powershell Script *** \n $sourcePath =  "<directory_path>/jc_directoryinsights_{start_date}_{end_date}.json" \n Get-JCEvent -service {service} -StartTime {start_date} -EndTime {end_date} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
+    else: 
+            logger.info(f'service: {service},\n start-date: {start_date},\n end-date: {end_date},\n *** Powershell Script *** \n $sourcePath =  "<directory_path>/jc_directoryinsights_{start_date}_{end_date}.json" \n Get-JCEvent -service {service} -StartTime {start_date} -EndTime {end_date} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
+            
     for service in serviceList:
         url = "https://api.jumpcloud.com/insights/directory/v1/events"
         body = {
@@ -57,7 +65,7 @@ def jc_directoryinsights(event, context):
         headers = {
             'x-api-key': jcapikey,
             'content-type': "application/json",
-            'user-agent': "JumpCloud_AWSServerless.DirectoryInsights/0.0.1"
+            'user-agent': "JumpCloud_AWSServerless.DirectoryInsights/1.2.1"
         }
         if orgId != '':
             headers['x-org-id'] = orgId
@@ -80,7 +88,7 @@ def jc_directoryinsights(event, context):
                             },
                             {
                                 'Name': 'Version',
-                                'Value': '0.0.1'
+                                'Value': '1.2.1'
                             }
                         ],
                         'Unit': 'None',
@@ -91,6 +99,7 @@ def jc_directoryinsights(event, context):
             )
             continue
         data = responseBody
+            
         while (response.headers["X-Result-Count"] >= response.headers["X-Limit"]):
             body["search_after"] = json.loads(response.headers["X-Search_After"])
             response = requests.post(url, json=body, headers=headers)
@@ -101,6 +110,7 @@ def jc_directoryinsights(event, context):
             responseBody = json.loads(response.text)
             data = data + responseBody
         finalData += data
+        
     if len(finalData) == 0:
         return
     finalData.sort(key = lambda x:x['timestamp'], reverse=True)

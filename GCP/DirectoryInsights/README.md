@@ -3,11 +3,11 @@ _This document will walk a JumpCloud Administrator through deploying this Server
 
 _Note: This document assumes the use of Python 3.9_
 ## Table of Contents
-- [Gather JumpCloud Directory Insights Data with an GCP](#gather-jumpcloud-directory-insights-data-with-gcp-services)
+- [Gather JumpCloud Directory Insights Data with GCP Services](#gather-jumpcloud-directory-insights-data-with-gcp-services)
   - [Table of Contents](#table-of-contents)
   - [Pre-requisites](#pre-requisites)
-  - [Create Directory](#create-directory-to-store-directory-insights-files)
-  - [Edit cloudbuild.yaml](#edit-cloudbuildyaml)
+  - [Create Directory to Store Directory Insights Files](#create-directory-to-store-directory-insights-files)
+  - [Edit CloudBuild.yaml](#edit-cloudbuildyaml)
   - [Deploying the Application](#deploying-the-application)
 
 ## Pre-requisites
@@ -44,6 +44,7 @@ Using the GCLOUD CLI, you can [Cloud Build Deploy](https://cloud.google.com/sdk/
 ```
 _Note: `gcloud builds submit` default config is "cloudbuild.yaml" which is why we do not need to specify `--config=config.yaml` tag_
 _Note: `.gcloudignore` file excludes unwanted files/folders from getting push in the deploy process_
+_Note: Logs the service/s, timestamps, and Powershell script for the current API call when the app is ran. The script creates .gz file to be imported in AWS manually incase of timeouts or errors during operation_
 
 
 

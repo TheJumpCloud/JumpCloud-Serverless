@@ -25,3 +25,5 @@ Once everything has been created, the application will wait until your specified
 
 _Note: If an entire increment goes by without any Directory Insights data, we'll place a data point in a CloudWatch Metric in the JumpCloudDirectoryInsights Namespace. This namespace will not be created if you never have a time period without events._
 
+_Note: CloudWatch logs the service/s, timestamps, and Powershell script for the current API call when the app is ran. The script creates .gz file to be imported in AWS manually incase of timeouts or errors during operation_
+
