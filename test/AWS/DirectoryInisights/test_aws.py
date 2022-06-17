@@ -113,7 +113,7 @@ def test_changelog_version():
             latestVersion = (latestVersionText[latestVersionText.find("[")+1:latestVersionText.find("]")])
             break
     # get the version from this branch
-    with open(str(path.parent.parent.parent.absolute()) + '/AWS/DirectoryInsights/CHANGELOG.md') as f: 
+    with open(str(path.parent.parent.parent.absolute()) + '/AWS/DirectoryInsights/CHANGELOG.md') as f:
         lines = f.readlines()
     for line in lines:
         # print(line)
@@ -130,10 +130,23 @@ def test_changelog_version():
             useragent = scriptLine
             latestUserAgentFromBranch = re.search(r'DirectoryInsights/([\d.]+)', useragent).group(1)
             break
+    with open(str(path.parent.parent.parent.absolute()) + '/AWS/DirectoryInsights/serverless.yaml') as u:
+        scriptLines = u.readlines()
+    for scriptLine in scriptLines:
+        # print(scriptLine)
+        if search('SemanticVersion', scriptLine):
+            yamlVersion = scriptLine
+            print(yamlVersion)
+            latestYamlVersionFromBranch = re.search(r'SemanticVersion: ([\d.]+)', yamlVersion).group(1)
+            break
+    # Get the Yaml version from this branch:
     print('latest version from GitHub: ' + latestVersion)
     print('latest version from this Branch: ' + latestVersionBranch)
     print('useragent version from this Branch: ' + latestUserAgentFromBranch)
+    print('YamlVersion version from this Branch: ' + latestYamlVersionFromBranch)
     # Latest version should not be the same as the latest version from Branch
     assert latestVersion != latestVersionBranch
     # Latest version from branch should be updated in all places
     assert latestUserAgentFromBranch == latestVersionBranch
+    # Latest YamlVersion from branch should be updated in all places
+    assert latestYamlVersionFromBranch == latestVersionBranch
