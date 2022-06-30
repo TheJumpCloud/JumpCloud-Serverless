@@ -71,7 +71,7 @@ jobs:
       - sam/install
       - run:
           name: Package Template
-          command: sam package --template-file ./AWS/DirectoryInsights/serverless.yaml --output-template-file ./AWS/DirectoryInsights/packaged.yaml --s3-bucket jc-circleci-test-bucket
+          command: sam package --template-file ./AWS/DirectoryInsights/serverless.yaml --output-template-file ./AWS/DirectoryInsights/packaged.yaml --s3-bucket jumpcloud-sam
       - persist_to_workspace:
           root: .
           paths:
