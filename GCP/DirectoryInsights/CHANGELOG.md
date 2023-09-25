@@ -1,4 +1,8 @@
 # Changelog
+## [1.0.2] - 2023-09-25
+
+### Fixes
+- Updated Requests package version to 2.31.0 in the requirements file
 ## [1.0.1] - 2022-06-13
 
 ### Added
