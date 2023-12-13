@@ -1,4 +1,12 @@
 # Changelog
+## [1.3.0] - 2023-12-13
+
+### Added
+
+- Added new services: password_manager, object_storage, software
+- Added parameter or option to format JSON to SingleLine or MultiLine
+  
+# Changelog
 ## [1.2.1] - 2022-06-13
 
 ### Added

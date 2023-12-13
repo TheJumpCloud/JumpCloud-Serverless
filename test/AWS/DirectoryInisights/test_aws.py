@@ -52,6 +52,7 @@ def test_script_produces_output_with_all_services():
     os.environ['incrementAmount'] = "1"
     os.environ['service'] = 'all'
     os.environ['OrgId'] = '5ebeb8c7de6f1e713e19cfba'
+    os.environ['JsonFormat'] = 'MultiLine'
     # End Variables
     run_subproc(pwd + "/temp_get-jcdirectoryinsights.py")
     files = glob.glob(pwd + "/jc_directoryinsights*.json.gz")
@@ -70,19 +71,66 @@ def test_json_contents_for_all_services():
     assert len(j) != 0
     # service can include all types
     for i in j:
-        assert i['service'] == 'directory' or i['service'] == 'radius' or i['service'] == 'systems' or i['service'] == 'sso' or i['service'] == 'ldap' or i['service'] == 'mdm'
+        assert i['service'] == 'directory' or i['service'] == 'radius' or i['service'] == 'systems' or i['service'] == 'sso' or i['service'] == 'ldap' or i['service'] == 'mdm' or i['service'] == 'object_storage' or i['service'] == 'software' or i['service'] == 'password_manager'
     j.sort(key = lambda x:x['timestamp'], reverse=True)
     # data should be sorted correctly
     assert j[0]['timestamp'] > j[len(j)-1]['timestamp']
     for file in files:
         # remove file for next test
         os.remove(file)
+        
+def check_line_format(json_array):
+    # Check if an object is one line
+    json_data = json.dumps(json_array)
+    if '},\\n{' in json_data:
+        return 'Single-line'
+    elif '},\\n    {\\n ' in json_data:
+        return 'Multi-line'
+    
+def test_json_format_multi_line():
+    # TODO: Change when migrating to GH Actions
+    file_path = "/Users/kmaranion/Downloads/test copy.json" ### Change to your file path
+    try:
+        with open(file_path, 'r') as file:
+            file_contents = file.read()
+            print(file_contents)
+            if file_contents == []:
+                print("No files found")
+                assert False
+            elif file_contents != []:    
+                    result = check_line_format(file_contents)
+                    print(result)
+                    assert result == 'Multi-line', "JSON data is not formatted correctly "
+    except FileNotFoundError:
+        print("File not found or unable to open the file.")
+    except IOError:
+        print("Error reading the file.")
+        
+def test_json_format_single_line():
+    # TODO: Change when migrating to GH Actions
+    file_path = "/Users/kmaranion/Downloads/test.json" ### Change to your file path
 
+    try:
+        with open(file_path, 'r') as file:
+            file_contents = file.read()
+            if file_contents == []:
+                print("No files found")
+                assert False
+            elif file_contents != []:    
+                    result = check_line_format(file_contents)
+                    print(result)
+                    assert result == 'Single-line', "JSON data is not formatted correctly " + result
+    except FileNotFoundError:
+        print("File not found or unable to open the file.")
+    except IOError:
+        print("Error reading the file.")
+        
 def test_json_directory_service_only():
     os.environ['incrementType'] = "day"
     os.environ['incrementAmount'] = "1"
     os.environ['service'] = 'directory'
     os.environ['OrgId'] = '5ebeb8c7de6f1e713e19cfba'
+    os.environ['JsonFormat'] = 'MultiLine'
     pwd = os.path.dirname(os.path.realpath(__file__))
     print("running file...")
     print(pwd + "/get-jcdirectoryinsights.py")

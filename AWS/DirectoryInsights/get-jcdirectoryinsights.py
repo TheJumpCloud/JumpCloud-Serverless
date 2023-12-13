@@ -20,6 +20,7 @@ def jc_directoryinsights(event, context):
         bucketName = os.environ['BucketName']
         service = os.environ['service']
         orgId = os.environ['OrgId']
+        JsonFormat = os.environ['JsonFormat']
     except KeyError as e:
         raise Exception(e)
 
@@ -39,7 +40,7 @@ def jc_directoryinsights(event, context):
     end_date = now.isoformat("T") + "Z"
 
     outfileName = "jc_directoryinsights_" + start_date + "_" + end_date + ".json.gz"
-    availableServices = ['directory','radius','sso','systems','ldap','mdm','all']
+    availableServices = ['directory','radius','sso','systems','ldap','mdm','all','object_storage','software','password_manager']
     serviceList = ((service.replace(" ", "")).lower()).split(",")
     for service in serviceList:
         if service not in availableServices:
@@ -65,7 +66,7 @@ def jc_directoryinsights(event, context):
         headers = {
             'x-api-key': jcapikey,
             'content-type': "application/json",
-            'user-agent': "JumpCloud_AWSServerless.DirectoryInsights/1.2.1"
+            'user-agent': "JumpCloud_AWSServerless.DirectoryInsights/1.3.0"
         }
         if orgId != '':
             headers['x-org-id'] = orgId
@@ -88,7 +89,7 @@ def jc_directoryinsights(event, context):
                             },
                             {
                                 'Name': 'Version',
-                                'Value': '1.2.1'
+                                'Value': '1.3.0'
                             }
                         ],
                         'Unit': 'None',
@@ -116,8 +117,14 @@ def jc_directoryinsights(event, context):
     finalData.sort(key = lambda x:x['timestamp'], reverse=True)
     try:
         gzOutfile = gzip.GzipFile(filename="/tmp/" + outfileName, mode="w", compresslevel=9)
-        gzOutfile.write(json.dumps(finalData, indent=2).encode("UTF-8"))
-        gzOutfile.close()
+        print ("Indent: " + JsonFormat)
+        if JsonFormat == "SingleLine":
+             gzOutfile.write(('[' + ',\n'.join(json.dumps(i) for i in data) + ']').encode('UTF-8'))
+             gzOutfile.close()
+        else:
+            gzOutfile.write(json.dumps(finalData, indent=2).encode("UTF-8"))
+            gzOutfile.close()
+           
     except Exception as e:
         raise Exception(e)
     try:
