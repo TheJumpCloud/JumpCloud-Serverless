@@ -14,6 +14,7 @@ _Note: This document assumes the use of Python 3+_
   - [Package and Deploy the Application](#package-and-deploy-the-application)
     - [Packaging the Application](#packaging-the-application)
     - [Deploying the Application](#deploying-the-application)
+    - [Formatting JSON](#formatting-json)
     - [Note on data](#note-on-data)
 
 ## Pre-requisites
@@ -91,7 +92,7 @@ _Note: Provide the name of the S3 bucket that you created for packaging and stor
 Using the AWS CLI, you can [deploy](https://docs.aws.amazon.com/cli/latest/reference/cloudformation/deploy/index.html) your template directly from your terminal.
 
 ```
-~/jc-directoryinsights$ aws cloudformation deploy --template-file ./packaged.yaml --stack-name <YOUR STACK NAME> --parameter-overrides JumpCloudApiKey=<API KEY> IncrementType=<INCREMENT TYPE> IncrementAmount=<INCREMENT AMOUNT> Service=<SERVICES> --capabilities CAPABILITY_IAM
+~/jc-directoryinsights$ aws cloudformation deploy --template-file ./packaged.yaml --stack-name <YOUR STACK NAME> --parameter-overrides JumpCloudApiKey=<API KEY> IncrementType=<INCREMENT TYPE> IncrementAmount=<INCREMENT AMOUNT> Service=<SERVICES> --JsonFormat=<JSON FORMAT> --capabilities CAPABILITY_IAM
 ```
 
 \_Note: IncrementType accepts "minute", "minutes", "hour", "hours", "day", and "days". Use the singular if the IncrementAmount is "1". <br>
@@ -112,6 +113,16 @@ Using the AWS SAM CLI, publish your application to the Serverless Applications R
 Once you have published your Application to the [Severless Application Repository](https://console.aws.amazon.com/serverlessrepo/), you can find and deploy your application from the Private Applications tab.
 
 </details>
+
+### Formatting JSON
+There are two options to format JSON, Singleline and Multiline format. To set the desired format set the parameter ```--JsonFormat=MultiLine``` or ```--JsonFormat=SingleLine``` when [Deploying the Application](#deploying-the-application)
+
+ex.
+
+SingleLine Format:
+![Alt text](image-2.png)
+MultiLine Format:
+![Alt text](image-1.png)
 
 ### Note on data
 

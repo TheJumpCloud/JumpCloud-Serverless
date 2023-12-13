@@ -27,7 +27,13 @@ Parameters:
   Service:
     Type: String
     Default: "all"
-    Description: 'Comma-delimited list of desired services to log. Available services: directory,radius,sso,systems,ldap,mdm. Default value is "all"'
+    Description: 'Comma-delimited list of desired services to log. Available services: directory,radius,sso,systems,ldap,mdm,object_storage,software,sso,password_manager. Default value is "all"'
+  JsonFormat:
+    Type: String
+    AllowedValues:
+      - MultiLine
+      - SingleLine
+    Description: 'JSon output indent format - MultiLine or SingleLine'
 
 Conditions:
   isSingular: !Equals [!Ref "IncrementAmount", 1]
@@ -37,7 +43,7 @@ Metadata:
     Name: JumpCloud-DirectoryInsights
     Description: This Serverless Application can be used to collect your JumpCloud Directory Insights data at a regular interval.
     Author: JumpCloud Solutions Architecture
-    SemanticVersion: 1.2.1
+    SemanticVersion: 1.3.0
     HomePageUrl: https://git.io/JJlrZ
     SourceCodeUrl: https://git.io/JJiMo
     LicenseUrl: LICENSE
@@ -130,6 +136,7 @@ Resources:
           service: !Sub ${Service}
           BucketName: !Ref DirectoryInsightsBucket
           OrgId: !Sub ${OrganizationID}
+          JsonFormat: !Sub ${JsonFormat}
       Events:
         GrabDirectoryInsights:
           Type: Schedule
