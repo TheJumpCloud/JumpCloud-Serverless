@@ -12,20 +12,65 @@ _Note: This document assumes the use of Python 3.9_
 
 ## Pre-requisites
 - [Your JumpCloud API key](https://docs.jumpcloud.com/2.0/authentication-and-authorization/authentication-and-authorization-overview)
+- Google Cloud Admin/Owner account with these roles:
+  - ```roles/serviceusage.serviceUsageAdmin```
+  - ```roles/cloudbuild.builds.editor```
 - [GCLOUD CLI installed](https://cloud.google.com/sdk/docs/install)
-- [Google Cloud Build](https://cloud.google.com/build/docs/securing-builds/configure-access-for-cloud-build-service-account)
-  - Permissions:
-    - Cloud Functions = Enabled
-    - Cloud Scheduler = Enabled
-    - Secret Manager = Enabled
-  - Cloud Build Service account email: admin access to services above
-- JumpCloud administrator will need `Cloud Build Editor` role with their GCP account
-- Cloud Functions Invoker service account
+  - If not logged in to CLI yet, run ```gcloud auth login ```
+- On your CLI, run these commands to enable the [services](https://cloud.google.com/apis?hl=en) needed to build the app:
+  - ```gcloud services enable cloudbuild.googleapis.com```
+  - ```gcloud services enable cloudfunctions.googleapis.com```
+  - ```gcloud services enable cloudscheduler.googleapis.com```
+  - ```gcloud services enable storage-component.googleapis.com```
+  - ```gcloud services enable secretmanager.googleapis.com```
+  - ```gcloud services enable cloudresourcemanager.googleapis.com```
+- Your GCP Project ID and Number, on your CLI you can run ```gcloud projects list``` to get your project's name and ID
+  - On your CLI create a variable for Project ID and Number so that you won't need to insert these variables on the commands below:
+    - ```PROJECTID=INSERTYOURGCPID```
+    - ```PROJECTNUM=INSERTYOURGCPNUM```
+- You must assign the Cloud Build Service account [roles](https://console.cloud.google.com/cloud-build/settings/). This account will have the suffix ```ProjectNumber@cloudbuild.gserviceaccount.com``` These can be removed after the build has succeeded:
+  - Cloud Functions Developer
+    - ```gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM@cloudbuild.gserviceaccount.com --role=roles/cloudfunctions.developer```
+  - Service Account User
+    - ```gcloud projects add-iam-policy-binding sa-slackbot --member=serviceAccount:262258398741@cloudbuild.gserviceaccount.com --role=roles/iam.serviceAccountUser```
+  - ![alt text](image-2.png)
+- You must assign the Compute Service account.This account will have the suffix ```*compute@developer.gserviceaccount.com``` These can be removed after the build has succeeded:
+
+  - Artifact Registry Administrator
+    - ```gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role roles/artifactregistry.admin```
+
+  - Cloud Functions Developer
+    - ```gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role roles/cloudfunctions.developer```
+
+  - Cloud Functions Invoker
+    - ```gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role roles/cloudfunctions.invoker```
+
+  - Cloud Scheduler Admin
+    - ```gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role roles/cloudscheduler.admin```
+
+  - Secret Manager Admin
+    - ```gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role roles/secretmanager.admin```
+
+  - Secret Manager Secret Accessor
+    - ```gcloud projects add-iam-policy-binding $PROJECTID  --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role roles/secretmanager.secretAccessor```
+
+  - Storage Admin
+    - ```gcloud projects add-iam-policy-binding $PROJECTID  --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role roles/storage.admin```
+
+  - Service Account User
+    - ```gcloud projects add-iam-policy-binding $PROJECTID  --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role roles/iam.serviceAccountUser```
+- You must also assign roles to the App Engine service account. This account will have the suffix @appspot.gserviceaccount.com
+
+  - Secret Manager Secret Accessor
+    - ```gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTID@appspot.gserviceaccount.com --role roles/secretmanager.secretAccessor```
+  - Storage Admin
+    - ```gcloud projects add-iam-policy-binding $PROJECTID  --member=serviceAccount:$PROJECTID@appspot.gserviceaccount.com  --role roles/storage.admin```
   
 ## Create Directory to Store Directory Insights Files
 
 Create a directory to store your Serverless Application and any dependencies required. In the root of that directory add [Directory Insights Files](https://github.com/TheJumpCloud/JumpCloud-Serverless/blob/master/GCP/DirectoryInsights/).
 Install the dependencies in requirements.txt file
+
 ```bash
 ~/DirectoryInsights$ pip install -r requirements.txt
 ```

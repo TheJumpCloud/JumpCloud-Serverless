@@ -1,58 +1,101 @@
 substitutions:
-  # Note: No quotations needed for the variable values, except for _SCHEDULE_CRON_TIME and _GCP_PROJECT_ID
+  # Note: No quotations needed for the variable values, except for _SCHEDULE_CRON_TIME and _GCP_PROJECT_ID_NAME
 
   _JC_API_KEY: CHANGEVALUE # JC API key
   _JC_ORG_ID: CHANGEVALUE # JC ORG id
   # JC Services: directory, radius, sso, systems, ldap, mdm
   # Can accept multiple values' for example:  _JC_SERVICE: directory,systems or gather logs from all services with the _JC_SERVICE: all
   _JC_SERVICE: CHANGEVALUE
-  _GCP_PROJECT_ID: "CHANGEVALUE" # GCP project Id
+  _GCP_PROJECT_ID_NAME: "CHANGEVALUE" # GCP project Id
+  _GCP_PROJECT_ID_NUMBER: "CHANGEVALUE" # GCP project Id Number
   _STORAGE_CLASS: CHANGEVALUE # Cloud Storage Class: standard, nearline, coldline, archive
   _BUCKET_NAME: CHANGEVALUE # Cloud Storage Bucket Name. Must be unique
   _FUNCTION_NAME: CHANGEVALUE # Cloud Functions Name
   _SCHEDULE_NAME: CHANGEVALUE # Cloud Scheduler Name
   _SCHEDULE_CRON_TIME: "CHANGEVALUE" # Check here: https://crontab.guru/
-  _SERVICE_ACCOUNT_EMAIL: CHANGEVALUE # Service account with Cloud Functions Invoke permission
   _REGION_LOCATION: CHANGEVALUE # https://cloud.google.com/compute/docs/regions-zones
   _SECRET_JC_API_KEY_NAME: CHANGEVALUE # Secret Manager JCAPIKEY Name
   _SECRET_JC_ORG_ID_NAME: CHANGEVALUE # # Secret Manager JCORGID Name
 
+
 steps:
-#  # Create a Storage bucket
-- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-  args: ['gsutil', 'mb' , '-p', '$_GCP_PROJECT_ID', '-c','$_STORAGE_CLASS', '-l', '$_REGION_LOCATION', 'gs://$_BUCKET_NAME']
+  # Step 1: Validate Google Cloud project ID
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        # Check if the project exists and retrieve details
+        gcloud projects describe '$_GCP_PROJECT_ID_NUMBER'
+  
+  #Step 2: Validate Google Cloud project ID Name
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        # Check if the project exists and retrieve details
+        gcloud projects describe '$_GCP_PROJECT_ID_NAME'
+  # Check and enable required Google Cloud services
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        if ! gcloud services list --enabled | grep -q "cloudbuild.googleapis.com"; then
+          gcloud services enable cloudbuild.googleapis.com
+        fi
+        if ! gcloud services list --enabled | grep -q "cloudfunctions.googleapis.com"; then
+          gcloud services enable cloudfunctions.googleapis.com
+        fi
+        if ! gcloud services list --enabled | grep -q "cloudscheduler.googleapis.com"; then
+          gcloud services enable cloudscheduler.googleapis.com
+        fi
+        if ! gcloud services list --enabled | grep -q "storage-component.googleapis.com"; then
+          gcloud services enable storage-component.googleapis.com
+        fi
+        if ! gcloud services list --enabled | grep -q "secretmanager.googleapis.com"; then
+          gcloud services enable secretmanager.googleapis.com
+        fi
+        if ! gcloud services list --enabled | grep -q "cloudresourcemanager.googleapis.com"; then
+          gcloud services enable cloudresourcemanager.googleapis.com
+        fi
+
+  #Create a Storage bucket
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    args: ['gsutil', 'mb', '-p', '$_GCP_PROJECT_ID_NAME', '-c', '$_STORAGE_CLASS', '-l', '$_REGION_LOCATION', 'gs://$_BUCKET_NAME']
 
   # Create secret keys for JCAPIKEY and JCORGID
-- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-  entrypoint: bash
-  args:
-    - -c
-    - |
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - -c
+      - |
         printf "$_JC_API_KEY" | gcloud secrets create $_SECRET_JC_API_KEY_NAME --data-file=-
         printf "$_JC_ORG_ID" | gcloud secrets create $_SECRET_JC_ORG_ID_NAME --data-file=-
 
   # Deploy the script to Google Cloud Functions as an HTTP trigger
-- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-  args:
-    - gcloud
-    - functions
-    - deploy
-    - $_FUNCTION_NAME
-    - --region=$_REGION_LOCATION
-    - --entry-point=run_di
-    - --source=.
-    - --trigger-http
-    - --runtime=python39
-    - --set-secrets=jc_api_key=$_SECRET_JC_API_KEY_NAME:latest,jc_org_id=$_SECRET_JC_ORG_ID_NAME:latest
-    - --set-env-vars=^:^cron_schedule=$_SCHEDULE_CRON_TIME:service=$_JC_SERVICE:bucket_name=$_BUCKET_NAME
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    args:
+      - gcloud
+      - functions
+      - deploy
+      - $_FUNCTION_NAME
+      - --region=$_REGION_LOCATION
+      - --entry-point=run_di
+      - --source=.
+      - --trigger-http
+      - --runtime=python39
+      - --set-secrets=jc_api_key=$_SECRET_JC_API_KEY_NAME:latest,jc_org_id=$_SECRET_JC_ORG_ID_NAME:latest
+      - --set-env-vars=cron_schedule=$_SCHEDULE_CRON_TIME,service=$_JC_SERVICE,bucket_name=$_BUCKET_NAME
 
-# Schedule
-- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-  entrypoint: bash
-  args:
-    - -c
-    - |
-      functionsURL=$(gcloud functions describe $_FUNCTION_NAME --region=$_REGION_LOCATION --flatten=httpsTrigger.url)
-      url=$(echo ${functionsURL} | grep -Eo 'https?://[^ ")]+')
-      echo "URL: $url"
-      gcloud scheduler jobs create http $_SCHEDULE_NAME --location=$_REGION_LOCATION --schedule="$_SCHEDULE_CRON_TIME" --uri="$url" --http-method=GET --oidc-service-account-email="$_SERVICE_ACCOUNT_EMAIL"
+  # Schedule
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        functionsURL=$(gcloud functions describe $_FUNCTION_NAME --region=$_REGION_LOCATION --flatten=httpsTrigger.url)
+        url=$(echo ${functionsURL} | grep -Eo 'https?://[^ ")]+')
+        echo "URL: $url"
+        gcloud scheduler jobs create http $_SCHEDULE_NAME --location=$_REGION_LOCATION --schedule="$_SCHEDULE_CRON_TIME" --uri="$url" --http-method=GET --oidc-service-account-email="$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com"
