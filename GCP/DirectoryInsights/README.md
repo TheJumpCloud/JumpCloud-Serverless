@@ -15,8 +15,9 @@ _Note: This document assumes the use of Python 3.9_
 - Google Cloud Admin/Owner account with these roles:
   - ```roles/serviceusage.serviceUsageAdmin```
   - ```roles/cloudbuild.builds.editor```
+  - ```roles/resourcemanager.projects.setIamPolicy```
 - [GCLOUD CLI installed](https://cloud.google.com/sdk/docs/install)
-  - If not logged in to CLI yet, run ```gcloud auth login ```
+  - After installing the CLI, run ```gcloud auth login``` and login with your Admin/Owner account
 - On your CLI, run these commands to enable the [services](https://cloud.google.com/apis?hl=en) needed to build the app:
   - ```gcloud services enable cloudbuild.googleapis.com```
   - ```gcloud services enable cloudfunctions.googleapis.com```
