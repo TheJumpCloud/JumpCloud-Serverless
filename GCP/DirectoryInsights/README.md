@@ -34,7 +34,7 @@ _Note: This document assumes the use of Python 3.9_
   - Service Account User
     - ```gcloud projects add-iam-policy-binding sa-slackbot --member=serviceAccount:262258398741@cloudbuild.gserviceaccount.com --role=roles/iam.serviceAccountUser```
   - ![alt text](image-2.png)
-- You must assign the Compute Service account.This account will have the suffix ```*compute@developer.gserviceaccount.com``` These can be removed after the build has succeeded:
+- You must assign the Compute Service account. This account will have the suffix ```*compute@developer.gserviceaccount.com``` These can be removed after the build has succeeded:
 
   - Artifact Registry Administrator
     - ```gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role roles/artifactregistry.admin```
