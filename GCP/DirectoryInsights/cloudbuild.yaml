@@ -62,13 +62,13 @@ steps:
           gcloud services enable cloudresourcemanager.googleapis.com
         fi
 
-  # Step 3: Create a Cloud Function
+  # Step 3: Storage bucket creation
   # Create a Storage bucket
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     args: ['gsutil', 'mb', '-p', '$_GCP_PROJECT_ID_NAME', '-c', '$_STORAGE_CLASS', '-l', '$_REGION_LOCATION', 'gs://$_BUCKET_NAME']
 
-  # Step 4: Create Secrets
-  # Create secret keys for JCAPIKEY and JCORGID
+  #Step 4: Create Secrets in Secret Manager
+  #Create secret keys for JCAPIKEY and JCORGID
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: bash
     args:
@@ -77,8 +77,8 @@ steps:
         printf "$_JC_API_KEY" | gcloud secrets create $_SECRET_JC_API_KEY_NAME --data-file=-
         printf "$_JC_ORG_ID" | gcloud secrets create $_SECRET_JC_ORG_ID_NAME --data-file=-
 
-  # Step 5: Create a Cloud Function
-  # Deploy the script to Google Cloud Functions as an HTTP trigger
+  #Step 5: Create a Cloud Function 
+  #Deploy the script to Google Cloud Functions as an HTTP trigger
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     args:
       - gcloud
@@ -93,7 +93,7 @@ steps:
       - --set-secrets=jc_api_key=$_SECRET_JC_API_KEY_NAME:latest,jc_org_id=$_SECRET_JC_ORG_ID_NAME:latest
       - --set-env-vars=cron_schedule=$_SCHEDULE_CRON_TIME,service=$_JC_SERVICE,bucket_name=$_BUCKET_NAME
 
-  # Step 6: Create a Cloud Scheduler
+  # # Step 6: Create a Cloud Scheduler job
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: bash
     args:

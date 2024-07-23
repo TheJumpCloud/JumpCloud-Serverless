@@ -17,7 +17,7 @@ _Note: This document assumes the use of Python 3.9_
   - ```roles/cloudbuild.builds.editor```
   - ```roles/resourcemanager.projects.setIamPolicy```
 - [GCLOUD CLI installed](https://cloud.google.com/sdk/docs/install)
-  - After installing the CLI, run ```gcloud auth login``` and login with your Admin/Owner account
+  - After installing the CLI, run ```gcloud auth login ``` and login with your Admin/Owner account
 - On your CLI, run these commands to enable the [services](https://cloud.google.com/apis?hl=en) needed to build the app:
   - ```gcloud services enable cloudbuild.googleapis.com```
   - ```gcloud services enable cloudfunctions.googleapis.com```
@@ -33,7 +33,17 @@ _Note: This document assumes the use of Python 3.9_
   - Cloud Functions Developer
     - ```gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM@cloudbuild.gserviceaccount.com --role=roles/cloudfunctions.developer```
   - Service Account User
-    - ```gcloud projects add-iam-policy-binding sa-slackbot --member=serviceAccount:262258398741@cloudbuild.gserviceaccount.com --role=roles/iam.serviceAccountUser```
+    - ```gcloud projects add-iam-policy-binding sa-slackbot --member=serviceAccount:$PROJECTNUM@cloudbuild.gserviceaccount.com --role=roles/iam.serviceAccountUser```
+  - Secrets Manager Admin
+    - ```gcloud projects add-iam-policy-binding sa-slackbot --member=serviceAccount:$PROJECTNUM@cloudbuild.gserviceaccount.com --role roles/secretmanager.admin```
+  - Storage Admin
+    - ```gcloud projects add-iam-policy-binding sa-slackbot --member=serviceAccount:$PROJECTNUM@cloudbuild.gserviceaccount.com --role roles/storage.admin```
+  - Cloud Functions Invoker
+    - ```gcloud projects add-iam-policy-binding sa-slackbot --member=serviceAccount:$PROJECTNUM@cloudbuild.gserviceaccount.com --role roles/cloudfunctions.invoker```
+  - Cloud Build Builder
+    - ```gcloud projects add-iam-policy-binding sa-slackbot --member=serviceAccount:$PROJECTNUM@cloudbuild.gserviceaccount.com --role roles/cloudbuild.builds.builder```
+  - Cloud Scheduler Admin
+    - ```gcloud projects add-iam-policy-binding sa-slackbot --member=serviceAccount:$PROJECTNUM@cloudbuild.gserviceaccount.com --role roles/cloudscheduler.admin```
   - ![alt text](image-2.png)
 - You must assign the Compute Service account. This account will have the suffix ```*compute@developer.gserviceaccount.com``` These can be removed after the build has succeeded:
 
@@ -65,7 +75,9 @@ _Note: This document assumes the use of Python 3.9_
   - Secret Manager Secret Accessor
     - ```gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTID@appspot.gserviceaccount.com --role roles/secretmanager.secretAccessor```
   - Storage Admin
-    - ```gcloud projects add-iam-policy-binding $PROJECTID  --member=serviceAccount:$PROJECTID@appspot.gserviceaccount.com  --role roles/storage.admin```
+    - ```gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTID@appspot.gserviceaccount.com  --role roles/storage.admin```
+  - Cloud Functions Invoker
+    - ```gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTID@appspot.gserviceaccount.com --role roles/cloudfunctions.invoker```
   
 ## Create Directory to Store Directory Insights Files
 
