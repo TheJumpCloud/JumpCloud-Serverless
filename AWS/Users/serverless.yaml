@@ -5,7 +5,7 @@ Parameters:
   JumpCloudApiKey:
     Type: String
     NoEcho: true
-    AllowedPattern: \b[a-z0-9]{40}\b
+    AllowedPattern: \b[a-zA-Z0-9_]{40}\b
   IncrementType:
     Type: String
     Default: day

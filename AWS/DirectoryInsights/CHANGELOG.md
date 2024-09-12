@@ -1,4 +1,10 @@
 # Changelog
+## [1.3.1] - 2024-09-12
+
+### Added
+
+- Added a change to allow for new API Key types
+
 ## [1.3.0] - 2023-12-13
 
 ### Added

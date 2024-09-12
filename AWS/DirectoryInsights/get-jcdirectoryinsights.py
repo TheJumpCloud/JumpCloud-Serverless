@@ -66,7 +66,7 @@ def jc_directoryinsights(event, context):
         headers = {
             'x-api-key': jcapikey,
             'content-type': "application/json",
-            'user-agent': "JumpCloud_AWSServerless.DirectoryInsights/1.3.0"
+            'user-agent': "JumpCloud_AWSServerless.DirectoryInsights/1.3.1"
         }
         if orgId != '':
             headers['x-org-id'] = orgId
@@ -89,7 +89,7 @@ def jc_directoryinsights(event, context):
                             },
                             {
                                 'Name': 'Version',
-                                'Value': '1.3.0'
+                                'Value': '1.3.1'
                             }
                         ],
                         'Unit': 'None',
