@@ -5,7 +5,7 @@ Parameters:
   JumpCloudApiKey:
     Type: String
     NoEcho: true
-    AllowedPattern: \b[a-z0-9]{40}\b
+    AllowedPattern: \b[a-zA-Z0-9_]{40}\b
   IncrementType:
     Type: String
     Default: day
@@ -43,7 +43,7 @@ Metadata:
     Name: JumpCloud-DirectoryInsights
     Description: This Serverless Application can be used to collect your JumpCloud Directory Insights data at a regular interval.
     Author: JumpCloud Solutions Architecture
-    SemanticVersion: 1.3.0
+    SemanticVersion: 1.3.1
     HomePageUrl: https://git.io/JJlrZ
     SourceCodeUrl: https://git.io/JJiMo
     LicenseUrl: LICENSE
