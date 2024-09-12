@@ -1,4 +1,11 @@
 # Changelog
+
+## [1.3.2] - 2024-09-12
+
+### Added
+
+- Fixed application serverless repository installation not installing properly
+
 ## [1.3.1] - 2024-09-12
 
 ### Added
@@ -12,7 +19,6 @@
 - Added new services: password_manager, object_storage, software
 - Added parameter or option to format JSON to SingleLine or MultiLine
   
-# Changelog
 ## [1.2.1] - 2022-06-13
 
 ### Added
