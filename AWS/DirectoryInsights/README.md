@@ -97,7 +97,7 @@ aws cloudformation deploy --template-file ./packaged.yaml --stack-name <YOUR STA
 ```
 Example:
 ```
-aws cloudformation deploy --template-file ./packaged.yaml --stack-name JCExampleDIStack --parameter-overrides JumpCloudApiKey=YOURJCAPIKEY CronExpression="0/30 * * * ? *" Service=all --JsonFormat=MultiLine --capabilities CAPABILITY_IAM
+aws cloudformation deploy --template-file ./packaged.yaml --stack-name JCExampleDIStack --parameter-overrides JumpCloudApiKey=YOURJCAPIKEY CronExpression="0/30 * * * ? *" Service=all JsonFormat=MultiLine --capabilities CAPABILITY_IAM
 ```
 
 _Note: Verify that the CronExpression conforms to the specified EventBridge cron syntax, as detailed in [EventBridge Cron Formatting](https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-scheduled-rule-pattern.html). For example: `0/30 * * * ? *` = Every 30 minutes. <br>

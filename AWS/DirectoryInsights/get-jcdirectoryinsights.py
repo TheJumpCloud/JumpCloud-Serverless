@@ -1,4 +1,4 @@
-import requests, datetime, json, boto3, os, gzip, logging
+import requests, datetime, json, boto3, os, gzip, logging, croniter
 from botocore.exceptions import ClientError
 from croniter import croniter
 
@@ -18,7 +18,7 @@ def get_secret(secret_name):
     secret = get_secret_value_response['SecretString']
     return secret
 
-def getcCronTime(cronExpression):
+def get_cron_time(cronExpression):
     """
     Checks if the current time is within a tolerance of the cron schedule.
 
@@ -73,7 +73,7 @@ def jc_directoryinsights(event, context):
     
     jcapikey = get_secret(jcapikeyarn)
     
-    now, previousTime = getcCronTime(cronExpression) # get the current time and previous time
+    now, previousTime = get_cron_time(cronExpression) # get the current time and previous time
 
     # Convert to ISO format
     startDate = previousTime.isoformat("T") + "Z"
