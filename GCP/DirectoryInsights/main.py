@@ -1,4 +1,4 @@
-import croniter
+from croniter import croniter
 import datetime
 import json
 import os
@@ -7,6 +7,7 @@ from google.cloud import storage
 
 
 def jc_directory_insights():
+    print("########### JC Directory Insights Function Started ###########")
     try:
         jc_api_key = os.environ['jc_api_key']
         jc_org_id = os.environ['jc_org_id']
@@ -16,15 +17,23 @@ def jc_directory_insights():
 
     except KeyError as e:
         raise Exception(e)
-
-    date_now = datetime.datetime.utcnow()
-    now = date_now.replace(second=0, microsecond=0)
-    cron = croniter.croniter(cron_schedule, now)
-    start_dt = cron.get_prev(datetime.datetime)
+    
+    now = datetime.datetime.utcnow()
+    print(f'Cron Expression: {cron_schedule}')
+    try:
+        cron_time = croniter(cron_schedule, now - datetime.timedelta(seconds=59))  # get the previous time with 59 seconds of tolerance
+        now = cron_time.get_next(datetime.datetime)  # get the next run time from that previous time.
+        start_dt = cron_time.get_prev(datetime.datetime)  # get the previous run time
+        print(f'Current Cron Time: {now}')
+        print(f'Previous Cron Time: {start_dt}')
+        # time_diff = abs((now - previous_cron_time).total_seconds())
+    except Exception as e:
+        print(f"Error in cron expression: {e}")
+        # Exit the code and raise a
 
     start_date = start_dt.isoformat("T") + "Z"
     end_date = now.isoformat("T") + "Z"
-
+    print(f'start_date: {start_date}, end_date: {end_date}')
     available_services = ['directory', 'radius', 'sso', 'systems', 'ldap', 'mdm', 'all']
     service_list = ((service.replace(" ", "")).lower()).split(",")
     for service in service_list:

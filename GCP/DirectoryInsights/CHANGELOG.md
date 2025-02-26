@@ -4,7 +4,7 @@
 
 ### Fixes
 - Scheduling data gaps
-- Fixed issues with deploying cloud functions to the new cloud run functions
+- Fixed issues with deploying cloud run functions
 
 ## [1.0.2] - 2023-09-25
 
