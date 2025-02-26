@@ -2,7 +2,7 @@
 
 _This document will walk a JumpCloud Administrator through packaging and deploying this Serverless Application manually. This workflow is intended for those who need to make modifications to the code or tie this solution into other AWS resources. If you would simply like to deploy this Serverless Application as-is, you can do so from the [Serverless Application Repository](https://serverlessrepo.aws.amazon.com/applications/us-east-2/339347137473/JumpCloud-DirectoryInsights)_
 
-_Note: This document assumes the use of Python 3+_
+_Note: This document assumes the use of Python 3.9+_
 
 ## Table of Contents
 
@@ -52,22 +52,23 @@ _Note: This document assumes the use of Python 3+_
 
 Create a directory to store your Serverless Application and any dependencies required. In the root of that directory create your [Python Script](https://github.com/TheJumpCloud/JumpCloud-Serverless/blob/master/AWS/DirectoryInsights/get-jcdirectoryinsights.py).
 
-This Application requires `boto3`, and `requests`. Install these dependencies using pip3. Within the directory you created, run the following commands to install the dependencies within the directory.
+This Application requires `boto3`, `requests`, and `croniter` packages. Install these dependencies using pip3. Within the directory you created, run the following commands to install the dependencies within the directory.
 
 ```bash
-~/jc-directoryinsights$ pip3 install boto3 -t .
-~/jc-directoryinsights$ pip3 install requests -t .
+pip3 install boto3 -t .
+pip3 install requests -t .
+pip3 install croniter -t .
 ```
 
 Create a ZIP archive of the Python script and the dependencies.
 
 ```
-~/jc-directoryinsights$ zip -r get-jcdirectoryinsights.zip .
+zip -r get-jcdirectoryinsights.zip .
 ```
 
 ## Create SAM Template
 
-In the root of your directory, create a SAM template named [serverless.yaml](https://github.com/TheJumpCloud/support/blob/SA-1258-DI-Serverless/AWS/Serverless/DirectoryInsights/serverless.yaml).
+In the root of your directory, create a yaml file named `serverless.yaml` and copy the contents of this template: [serverless.yaml](https://github.com/TheJumpCloud/JumpCloud-Serverless/blob/master/AWS/DirectoryInsights/serverless.yaml).
 
 _Note: The example template provided assumes that you have named your ZIP file get-jcdirectoryinsights.zip. If this is not true, update the `CodeUri` property to reflect the correct name._ \
 _This also assumes the name of your Python script is named get-jcdirectoryinsights.py and the `def` in your python script is named jc_directoryinsights. If neither of these is true, update the `Handler` property to match a <script_name>.<def_name> format._
@@ -79,7 +80,7 @@ _This also assumes the name of your Python script is named get-jcdirectoryinsigh
 Using the AWS SAM CLI, package your application. This will upload your ZIP archive and `serverless.yaml` file to an S3 bucket. It will also create a file named `packaged.yaml` in your directory. `packaged.yaml` is an updated version of the SAM template that you provided that now directs to your S3 bucket and the script and dependencies now stored within it.
 
 ```
-~/jc-directoryinsights$ sam package --template-file serverless.yaml --output-template-file packaged.yaml --s3-bucket <YOUR S3 BUCKET>
+sam package --template-file serverless.yaml --output-template-file packaged.yaml --s3-bucket <YOUR S3 BUCKET>
 ```
 
 _Note: Provide the name of the S3 bucket that you created for packaging and storing your application._
@@ -92,25 +93,32 @@ _Note: Provide the name of the S3 bucket that you created for packaging and stor
 Using the AWS CLI, you can [deploy](https://docs.aws.amazon.com/cli/latest/reference/cloudformation/deploy/index.html) your template directly from your terminal.
 
 ```
-~/jc-directoryinsights$ aws cloudformation deploy --template-file ./packaged.yaml --stack-name <YOUR STACK NAME> --parameter-overrides JumpCloudApiKey=<API KEY> IncrementType=<INCREMENT TYPE> IncrementAmount=<INCREMENT AMOUNT> Service=<SERVICES> --JsonFormat=<JSON FORMAT> --capabilities CAPABILITY_IAM
+aws cloudformation deploy --template-file ./packaged.yaml --stack-name <YOUR STACK NAME> --parameter-overrides JumpCloudApiKey=<API KEY> CronExpression="<CRON EXPRESSION>" Service=<SERVICES> --JsonFormat=<JSON FORMAT> --capabilities CAPABILITY_IAM
+```
+Example:
+```
+aws cloudformation deploy --template-file ./packaged.yaml --stack-name JCExampleDIStack --parameter-overrides JumpCloudApiKey=YOURJCAPIKEY CronExpression="0/30 * * * ? *" Service=all --JsonFormat=MultiLine --capabilities CAPABILITY_IAM
 ```
 
-\_Note: IncrementType accepts "minute", "minutes", "hour", "hours", "day", and "days". Use the singular if the IncrementAmount is "1". <br>
-Service accepts a comma-delimited list of services to log. To select all services, set the Service parameter to "all". To limit data to a specific service set the Service parameter to any of the following: directory,radius,sso,systems,ldap,mdm.
+_Note: Verify that the CronExpression conforms to the specified EventBridge cron syntax, as detailed in [EventBridge Cron Formatting](https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-scheduled-rule-pattern.html). For example: `0/30 * * * ? *` = Every 30 minutes. <br>
+Service accepts a comma-delimited list of services to log. To select all services, set the Service parameter to "all". To limit data to a specific service set the Service parameter to any of the following: directory,radius,sso,systems,ldap,mdm._
 
 </details>
 
 <details>
 <summary>Deploy Alternative: Privately Publish the Application</summary>
-Rather than deploying your Application from the CLI, you can also publish your application so that it is viewable via the [Severless Application Repository](https://console.aws.amazon.com/serverlessrepo/). By default, published applications are "Private" so they will not be publicly available until set otherwise.
+Rather than deploying your Application from the CLI, you can also publish your application so that it is viewable via the [Severless Application Repository](https://console.aws.amazon.com/serverlessrepo/) . By default, published applications are "Private" so they will not be publicly available until set otherwise.
 
 Using the AWS SAM CLI, publish your application to the Serverless Applications Repository.
 
 ```
-~/jc-directorys$ sam publish --template packaged.yaml --region <REGION>
+sam publish --template packaged.yaml --region <REGION>
 ```
 
 Once you have published your Application to the [Severless Application Repository](https://console.aws.amazon.com/serverlessrepo/), you can find and deploy your application from the Private Applications tab.
+
+_Note: Verify that the CronExpression conforms to the specified EventBridge cron syntax, as detailed in [EventBridge Cron Formatting](https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-scheduled-rule-pattern.html). For example: `0/30 * * * ? *` = Every 30 minutes. <br>
+Service accepts a comma-delimited list of services to log. To select all services, set the Service parameter to "all". To limit data to a specific service set the Service parameter to any of the following: directory,radius,sso,systems,ldap,mdm._
 
 </details>
 

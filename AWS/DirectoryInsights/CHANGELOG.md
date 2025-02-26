@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.0] - 2025-02-26
+
+### Added
+
+- Replaced EventBridge Rate scheduling to Cron scheduling for fine-grained scheduling control
+- Fixed issue with server runtime creating time gaps with API calls
+
 ## [1.3.2] - 2024-09-12
 
 ### Added
