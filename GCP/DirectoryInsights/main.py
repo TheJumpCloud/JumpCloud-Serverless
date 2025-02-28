@@ -41,13 +41,14 @@ def jc_directory_insights():
         # Timestamps of the cron schedule
         print(f'Timestamps of the cron schedule: {start_date}, {end_date}')
         # Print an instruction to run the powershell script manually and save it to the S3 bucket
-        print(f"Please run the powershell script manually and save it to the S3 bucket: {bucket_name}")
+        print(f"Please run the powershell script manually and save it to the Storage bucket: {bucket_name}")
         print(f'service: {service},\n start-date: {start_date},\n end-date: {end_date},\n *** Powershell Script *** \n $sourcePath =  "<directory_path>/jc_directoryinsights_{start_date}_{end_date}.json" \n Get-JCEvent -service {service} -start_date {start_date} -EndTime {end_date} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
 
         raise Exception("Cron time is not within the tolerance.") # This will exit the code
     
     print(f'start_date: {start_date}, end_date: {end_date}')
-    available_services = ['directory', 'radius', 'sso', 'systems', 'ldap', 'mdm', 'all']
+    available_services = ['alerts', 'directory', 'password_manager', 'sso', 'radius', 'systems', 'software', 'mdm', 'object_storage', 'saas_app_management', 'access_management']
+    
     service_list = ((service.replace(" ", "")).lower()).split(",")
     for service in service_list:
         if service not in available_services:
