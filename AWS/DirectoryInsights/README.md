@@ -16,6 +16,7 @@ _Note: This document assumes the use of Python 3.9+_
     - [Deploying the Application](#deploying-the-application)
     - [Formatting JSON](#formatting-json)
     - [Note on data](#note-on-data)
+    - [Note on Lamda resource memory](#note-on-lamda-resource-memory)
 
 ## Pre-requisites
 
@@ -93,7 +94,7 @@ _Note: Provide the name of the S3 bucket that you created for packaging and stor
 Using the AWS CLI, you can [deploy](https://docs.aws.amazon.com/cli/latest/reference/cloudformation/deploy/index.html) your template directly from your terminal.
 
 ```
-aws cloudformation deploy --template-file ./packaged.yaml --stack-name <YOUR STACK NAME> --parameter-overrides JumpCloudApiKey=<API KEY> CronExpression="<CRON EXPRESSION>" Service=<SERVICES> --JsonFormat=<JSON FORMAT> --capabilities CAPABILITY_IAM
+aws cloudformation deploy --template-file ./packaged.yaml --stack-name <YOUR STACK NAME> --parameter-overrides JumpCloudApiKey=<API KEY> CronExpression="<CRON EXPRESSION>" Service=<SERVICES> JsonFormat=<JSON FORMAT> --capabilities CAPABILITY_IAM
 ```
 Example:
 ```
@@ -142,3 +143,7 @@ $data | ConvertTo-Json -Depth 99 | Out-file ./JsonData.json
 ```
 
 The `JsonData.json` file can be saved to an S3 bucket to store a 'backup' of all available data.
+
+### Note on Lamda resource memory
+
+The Lambda function memory settings `MemorySize` in the `serverless.yaml` file can be adjusted to optimize performance and cost. Currently, `MemorySize` is set to `512` megabytes. Administrators are encouraged to experiment with different memory allocations to find the optimal configuration for their specific workload. Increasing memory can improve performance for compute-intensive tasks, while decreasing it can reduce costs for less demanding operations.

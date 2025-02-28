@@ -18,12 +18,14 @@ def get_secret(secret_name):
     secret = get_secret_value_response['SecretString']
     return secret
 
-def get_cron_time(cronExpression):
+def get_cron_time(cronExpression, timeTolerance):
     """
     Checks if the current time is within a tolerance of the cron schedule.
 
     Args:
         cronExpression: The cron expression.
+        timeTolerance: The tolerance in seconds/timeDelta.
+
     Returns:
         currentCronTime: The next run time of the cron schedule.
         previousCronTime: The previous run time of the cron schedule.
@@ -36,7 +38,7 @@ def get_cron_time(cronExpression):
     cronExpression = " ".join(cronParts[:5]) # Get the first 5 fields of the cron expression, this will not include the year field
     logger.info(f'Cron Expression: {cronExpression}')
     try:
-        cronTime = croniter(cronExpression, now - datetime.timedelta(seconds=59))  # get the previous time with 59 seconds of tolerance
+        cronTime = croniter(cronExpression, now - datetime.timedelta(seconds=timeTolerance))  # get the previous time with 59 seconds of tolerance
         currentCronTime = cronTime.get_next(datetime.datetime)  # get the next run time from that previous time.
         previousCronTime = cronTime.get_prev(datetime.datetime)  # get the previous run time
         logger.info(f'Current Cron Time: {currentCronTime}')
@@ -72,12 +74,24 @@ def jc_directoryinsights(event, context):
         raise Exception(e)
     
     jcapikey = get_secret(jcapikeyarn)
+    timeTolerance=10
+    now, previousTime = get_cron_time(cronExpression, timeTolerance) # get the current time and previous time
+    nowSeconds = now.second
     
-    now, previousTime = get_cron_time(cronExpression) # get the current time and previous time
 
     # Convert to ISO format
     startDate = previousTime.isoformat("T") + "Z"
     endDate = now.isoformat("T") + "Z"
+    
+    # If the cronTime is not within the tolerance, error out
+    if nowSeconds >= timeTolerance:
+        # Timestamps of the cron schedule
+        logger.info(f'Timestamps of the cron schedule: {startDate}, {endDate}')
+        # Print an instruction to run the powershell script manually and save it to the S3 bucket
+        logger.info(f"Please run the powershell script manually and save it to the S3 bucket: {bucketName}")
+        logger.info(f'service: {service},\n start-date: {startDate},\n end-date: {endDate},\n *** Powershell Script *** \n $sourcePath =  "<directory_path>/jc_directoryinsights_{startDate}_{endDate}.json" \n Get-JCEvent -service {service} -startDate {startDate} -EndTime {endDate} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
+
+        raise Exception("Cron time is not within the tolerance.") # This will exit the code
 
     outfileName = "jc_directoryinsights_" + startDate + "_" + endDate + ".json.gz"
     availableServices = ['directory','radius','sso','systems','ldap','mdm','all','object_storage','software','password_manager']
