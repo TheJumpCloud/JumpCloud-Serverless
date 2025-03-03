@@ -1,4 +1,4 @@
-import croniter
+from croniter import croniter
 import datetime
 import json
 import os
@@ -7,6 +7,7 @@ from google.cloud import storage
 
 
 def jc_directory_insights():
+    print("########### JC Directory Insights Function Started ###########")
     try:
         jc_api_key = os.environ['jc_api_key']
         jc_org_id = os.environ['jc_org_id']
@@ -16,16 +17,38 @@ def jc_directory_insights():
 
     except KeyError as e:
         raise Exception(e)
+    
+    now = datetime.datetime.utcnow()
+    print(f'Cron Expression: {cron_schedule}')
+    time_tolerance = 10
+    try:
+        cron_time = croniter(cron_schedule, now - datetime.timedelta(seconds=time_tolerance))  # get the previous time with 59 seconds of tolerance
+        now = cron_time.get_next(datetime.datetime)  # get the next run time from that previous time.
+        start_dt = cron_time.get_prev(datetime.datetime)  # get the previous run time        
+        print(f'Current Cron Time: {now}')
+        print(f'Previous Cron Time: {start_dt}')
+        # time_diff = abs((now - previous_cron_time).total_seconds())
+    except Exception as e:
+        print(f"Error in cron expression: {e}")
+        # Exit the code and raise a
 
-    date_now = datetime.datetime.utcnow()
-    now = date_now.replace(second=0, microsecond=0)
-    cron = croniter.croniter(cron_schedule, now)
-    start_dt = cron.get_prev(datetime.datetime)
-
+    now_seconds = now.second
     start_date = start_dt.isoformat("T") + "Z"
     end_date = now.isoformat("T") + "Z"
+    
+    # If the cronTime is not within the tolerance, error out
+    if now_seconds >= time_tolerance:
+        # Timestamps of the cron schedule
+        print(f'Timestamps of the cron schedule: {start_date}, {end_date}')
+        # Print an instruction to run the powershell script manually and save it to the S3 bucket
+        print(f"Please run the powershell script manually and save it to the Storage bucket: {bucket_name}")
+        print(f'service: {service},\n start-date: {start_date},\n end-date: {end_date},\n *** Powershell Script *** \n $sourcePath =  "<directory_path>/jc_directoryinsights_{start_date}_{end_date}.json" \n Get-JCEvent -service {service} -start_date {start_date} -EndTime {end_date} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
 
-    available_services = ['directory', 'radius', 'sso', 'systems', 'ldap', 'mdm', 'all']
+        raise Exception("Cron time is not within the tolerance.") # This will exit the code
+    
+    print(f'start_date: {start_date}, end_date: {end_date}')
+    available_services = ['all', 'alerts', 'directory', 'password_manager', 'sso', 'radius', 'systems', 'software', 'mdm', 'object_storage', 'saas_app_management', 'access_management']
+    
     service_list = ((service.replace(" ", "")).lower()).split(",")
     for service in service_list:
         if service not in available_services:

@@ -4,7 +4,7 @@ substitutions:
   _JC_API_KEY: CHANGEVALUE # JC API key
   _JC_ORG_ID: CHANGEVALUE # JC ORG id
   # JC Services: directory, radius, sso, systems, ldap, mdm
-  # Can accept multiple values' for example:  _JC_SERVICE: directory,systems or gather logs from all services with the _JC_SERVICE: all
+  # Can accept multiple values' for example:  _JC_SERVICE: directory,systems or gather logs from all services with the _JC_SERVICE: all. Available services: alerts, all, directory, ldap, mdm, object_storage, password_manager, radius, reports, saas_app_management, software, sso, systems, and access_management.
   _JC_SERVICE: CHANGEVALUE
   _GCP_PROJECT_ID_NAME: "CHANGEVALUE" # GCP project Id
   _GCP_PROJECT_ID_NUMBER: "CHANGEVALUE" # GCP project Id Number
@@ -77,21 +77,22 @@ steps:
         printf "$_JC_API_KEY" | gcloud secrets create $_SECRET_JC_API_KEY_NAME --data-file=-
         printf "$_JC_ORG_ID" | gcloud secrets create $_SECRET_JC_ORG_ID_NAME --data-file=-
 
-  #Step 5: Create a Cloud Function 
-  #Deploy the script to Google Cloud Functions as an HTTP trigger
+  #Step 5: Create a Cloud Run Functions
+  # Deploy the script to Google Cloud Run Functions(2nd gen) as an HTTP trigger
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     args:
-      - gcloud
-      - functions
-      - deploy
-      - $_FUNCTION_NAME
-      - --region=$_REGION_LOCATION
-      - --entry-point=run_di
-      - --source=.
-      - --trigger-http
-      - --runtime=python39
-      - --set-secrets=jc_api_key=$_SECRET_JC_API_KEY_NAME:latest,jc_org_id=$_SECRET_JC_ORG_ID_NAME:latest
-      - --set-env-vars=cron_schedule=$_SCHEDULE_CRON_TIME,service=$_JC_SERVICE,bucket_name=$_BUCKET_NAME
+    - gcloud
+    - functions
+    - deploy
+    - $_FUNCTION_NAME
+    - --region=$_REGION_LOCATION
+    - --source=.
+    - --runtime=python39
+    - --set-secrets=jc_api_key=$_SECRET_JC_API_KEY_NAME:latest,jc_org_id=$_SECRET_JC_ORG_ID_NAME:latest
+    - --set-env-vars=cron_schedule=$_SCHEDULE_CRON_TIME,service=$_JC_SERVICE,bucket_name=$_BUCKET_NAME
+    - --entry-point=run_di
+    - --trigger-http
+    - --run-service-account=$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com
 
   # # Step 6: Create a Cloud Scheduler job
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -99,7 +100,8 @@ steps:
     args:
       - -c
       - |
-        functionsURL=$(gcloud functions describe $_FUNCTION_NAME --region=$_REGION_LOCATION --flatten=httpsTrigger.url)
-        url=$(echo ${functionsURL} | grep -Eo 'https?://[^ ")]+')
+        apt-get update && apt-get install -y jq
+        functionsURL=$(gcloud functions describe $_FUNCTION_NAME --region=$_REGION_LOCATION --format=json)
+        url=$(echo "$functionsURL" | jq -r '.url')
         echo "URL: $url"
         gcloud scheduler jobs create http $_SCHEDULE_NAME --location=$_REGION_LOCATION --schedule="$_SCHEDULE_CRON_TIME" --uri="$url" --http-method=GET --oidc-service-account-email="$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com"
