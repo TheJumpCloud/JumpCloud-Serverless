@@ -31,7 +31,7 @@ Metadata:
     Name: JumpCloud-DirectoryInsights
     Description: This Serverless Application can be used to collect your JumpCloud Directory Insights data at a regular interval.
     Author: JumpCloud Solutions Architecture
-    SemanticVersion: 2.0.0
+    SemanticVersion: 2.0.2
     HomePageUrl: https://git.io/JJlrZ
     SourceCodeUrl: https://git.io/JJiMo
     LicenseUrl: LICENSE
