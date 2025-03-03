@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.0.3] - 2025-02-25
+## [1.0.3] - 2025-03-03
 
 ### Fixes
 - Scheduling data gaps
