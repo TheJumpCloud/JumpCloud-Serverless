@@ -94,7 +94,7 @@ def jc_directoryinsights(event, context):
         raise Exception("Cron time is not within the tolerance.") # This will exit the code
 
     outfileName = "jc_directoryinsights_" + startDate + "_" + endDate + ".json.gz"
-    availableServices = ['alerts', 'directory', 'password_manager', 'sso', 'radius', 'systems', 'software', 'mdm', 'object_storage', 'saas_app_management', 'access_management']
+    availableServices = ['all', 'alerts', 'directory', 'password_manager', 'sso', 'radius', 'systems', 'software', 'mdm', 'object_storage', 'saas_app_management', 'access_management']
     serviceList = ((service.replace(" ", "")).lower()).split(",")
     for service in serviceList:
         if service not in availableServices:

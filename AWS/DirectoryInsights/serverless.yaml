@@ -17,7 +17,7 @@ Parameters:
   Service:
     Type: String
     Default: "all"
-    Description: 'Comma-delimited list of desired services to log. Available services: directory,radius,sso,systems,ldap,mdm,object_storage,software,sso,password_manager. Default value is "all"'
+    Description: 'Comma-delimited list of desired services to log. Available services: alerts, all, directory, ldap, mdm, object_storage, password_manager, radius, reports, saas_app_management, software, sso, systems, access_management . Default value is "all"'
   JsonFormat:
     Type: String
     AllowedValues:
