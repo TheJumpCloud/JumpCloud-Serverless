@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.0.2] - 2025-03-03
+
+### Added
+
+- Fixed deployment bug
+
 ## [2.0.0] - 2025-03-03
 
 ### Added

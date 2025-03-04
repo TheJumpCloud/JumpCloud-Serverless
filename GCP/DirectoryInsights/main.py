@@ -47,7 +47,7 @@ def jc_directory_insights():
         raise Exception("Cron time is not within the tolerance.") # This will exit the code
     
     print(f'start_date: {start_date}, end_date: {end_date}')
-    available_services = ['all', 'alerts', 'directory', 'password_manager', 'sso', 'radius', 'systems', 'software', 'mdm', 'object_storage', 'saas_app_management', 'access_management']
+    available_services = ['all','alerts','directory','password_manager','sso','radius','systems','software','mdm','object_storage','saas_app_management','access_management']
     
     service_list = ((service.replace(" ", "")).lower()).split(",")
     for service in service_list:

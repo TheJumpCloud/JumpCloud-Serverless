@@ -89,12 +89,12 @@ def jc_directoryinsights(event, context):
         logger.info(f'Timestamps of the cron schedule: {startDate}, {endDate}')
         # Print an instruction to run the powershell script manually and save it to the S3 bucket
         logger.info(f"Please run the powershell script manually and save it to the S3 bucket: {bucketName}")
-        logger.info(f'service: {service},\n start-date: {startDate},\n end-date: {endDate},\n *** Powershell Script *** \n $sourcePath =  "<directory_path>/jc_directoryinsights_{startDate}_{endDate}.json" \n Get-JCEvent -service {service} -startDate {startDate} -EndTime {endDate} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
+        logger.info(f'service: {service},\n start-date: {startDate},\n end-date: {endDate},\n *** Powershell Script *** \n $sourcePath =  "<directory_path>/jc_directoryinsights_{startDate}_{endDate}.json" \n Get-JCEvent -service {service} -startTime {startDate} -EndTime {endDate} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
 
         raise Exception("Cron time is not within the tolerance.") # This will exit the code
 
     outfileName = "jc_directoryinsights_" + startDate + "_" + endDate + ".json.gz"
-    availableServices = ['all', 'alerts', 'directory', 'password_manager', 'sso', 'radius', 'systems', 'software', 'mdm', 'object_storage', 'saas_app_management', 'access_management']
+    availableServices = ['all','alerts','directory','password_manager','sso','radius','systems','software','mdm','object_storage','saas_app_management','access_management']
     serviceList = ((service.replace(" ", "")).lower()).split(",")
     for service in serviceList:
         if service not in availableServices:
@@ -105,9 +105,9 @@ def jc_directoryinsights(event, context):
 
     if len(serviceList) > 1:
         for service in serviceList:
-            logger.info(f'service: {service},\n start-date: {startDate},\n end-date: {endDate},\n *** Powershell Script *** \n $sourcePath =  "<directory_path>/jc_directoryinsights_{startDate}_{endDate}.json" \n Get-JCEvent -service {service} -startDate {startDate} -EndTime {endDate} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
+            logger.info(f'service: {service},\n start-date: {startDate},\n end-date: {endDate},\n *** Powershell Script *** \n $sourcePath =  "<directory_path>/jc_directoryinsights_{startDate}_{endDate}.json" \n Get-JCEvent -service {service} -startTime {startDate} -EndTime {endDate} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
     else: 
-            logger.info(f'service: {service},\n start-date: {startDate},\n end-date: {endDate},\n *** Powershell Script *** \n $sourcePath =  "<directory_path>/jc_directoryinsights_{startDate}_{endDate}.json" \n Get-JCEvent -service {service} -startDate {startDate} -EndTime {endDate} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
+            logger.info(f'service: {service},\n start-date: {startDate},\n end-date: {endDate},\n *** Powershell Script *** \n $sourcePath =  "<directory_path>/jc_directoryinsights_{startDate}_{endDate}.json" \n Get-JCEvent -service {service} -startTime {startDate} -EndTime {endDate} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
             
     for service in serviceList:
         url = "https://api.jumpcloud.com/insights/directory/v1/events"
@@ -120,7 +120,7 @@ def jc_directoryinsights(event, context):
         headers = {
             'x-api-key': jcapikey,
             'content-type': "application/json",
-            'user-agent': "JumpCloud_AWSServerless.DirectoryInsights/2.0.0"
+            'user-agent': "JumpCloud_AWSServerless.DirectoryInsights/2.0.2"
         }
         if orgId != '':
             headers['x-org-id'] = orgId
@@ -143,7 +143,7 @@ def jc_directoryinsights(event, context):
                             },
                             {
                                 'Name': 'Version',
-                                'Value': '2.0.0'
+                                'Value': '2.0.2'
                             }
                         ],
                         'Unit': 'None',
