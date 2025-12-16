@@ -114,7 +114,7 @@ Resources:
       Handler: get-jcdirectoryinsights.jc_directoryinsights
       MemorySize: 512
       Timeout: 180
-      Runtime: python3.9
+      Runtime: python3.14
       Role: !GetAtt DirectoryInsightsRole.Arn
       KmsKeyArn: !GetAtt DirectoryInsightsCmk.Arn
       Environment:
