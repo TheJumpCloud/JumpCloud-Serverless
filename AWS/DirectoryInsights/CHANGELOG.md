@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.1.0] - 2025-12-16
+
+### Added
+
+- Updated Python Runtime to latest version
+
 ## [2.0.2] - 2025-03-03
 
 ### Added
