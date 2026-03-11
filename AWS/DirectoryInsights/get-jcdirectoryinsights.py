@@ -63,6 +63,11 @@ def jc_orchestrator(event, context):
     availableServices = ['all','alerts','directory','password_manager','sso','radius','systems','software','mdm','object_storage','saas_app_management','access_management']
     serviceList = ((service_env.replace(" ", "")).lower()).split(",")
     
+    # If 'all' is in the list, just use 'all' and drop the duplicates
+    if 'all' in serviceList and len(serviceList) > 1:
+        logger.warning("Configuration contains 'all' alongside specific services. Defaulting to 'all' to prevent duplicate data ingestion.")
+        serviceList = ['all']
+    
     headers = {
         'x-api-key': jcapikey,
         'content-type': "application/json",
