@@ -22,7 +22,7 @@ def get_cron_time(cronExpression, timeTolerance):
     cronParts = cronExpression.split()
     cronExpression = " ".join(cronParts[:5])
     try:
-        # Add the tolerance (instead of subtracting) in case EventBridge fires a few seconds early
+        # Add the tolerance (instead of subtracting) in case EventBridge fires a few seconds late
         cronTime = croniter(cronExpression, now + datetime.timedelta(seconds=timeTolerance))
         
         # Get the most recent scheduled cron tick (e.g. 18:50:00)
