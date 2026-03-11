@@ -1,4 +1,4 @@
-import os, json, boto3, requests, gzip, logging, datetime
+import os, json, boto3, requests, gzip, logging, datetime, math
 from botocore.exceptions import ClientError
 from croniter import croniter
 
@@ -97,7 +97,7 @@ def jc_orchestrator(event, context):
             continue 
 
         # Slice the time if there are too many events
-        num_chunks = max(1, int((total_events // MAX_EVENTS_PER_WORKER) + 1))
+        num_chunks = max(1, math.ceil(total_events / MAX_EVENTS_PER_WORKER))
         time_slices = chunk_time_range(previousTime, now, num_chunks)
         logger.info(f"Chunks: {num_chunks}")
         logger.info(f"Slices: {time_slices}")
