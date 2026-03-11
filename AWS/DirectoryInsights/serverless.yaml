@@ -149,6 +149,7 @@ Resources:
           CronExpression: !Ref CronExpression
           service: !Sub ${Service}
           SqsQueueUrl: !Ref JobQueue
+          OrgId: !Sub ${OrganizationID}
       Events:
         ScheduleDirectoryInsightsTrigger:
           Type: Schedule

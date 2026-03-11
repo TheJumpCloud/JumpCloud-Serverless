@@ -47,6 +47,7 @@ def chunk_time_range(start_time, end_time, chunks):
 def jc_orchestrator(event, context):
     try:
         jcapikeyarn = os.environ['JcApiKeyArn']
+        orgId = os.environ.get('OrgId', '')
         cronExpression = os.environ['CronExpression']
         queueUrl = os.environ['SqsQueueUrl']
         service_env = os.environ['service']
@@ -73,6 +74,9 @@ def jc_orchestrator(event, context):
         'content-type': "application/json",
         'user-agent': "JumpCloud_AWSServerless.DirectoryInsights/3.0.0"
     }
+    # Inject the OrgId into the headers if it exists
+    if orgId != '':                 
+        headers['x-org-id'] = orgId
 
     MAX_EVENTS_PER_WORKER = 5000
 
