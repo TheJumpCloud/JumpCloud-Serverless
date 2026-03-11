@@ -69,7 +69,7 @@ def jc_orchestrator(event, context):
         'user-agent': "JumpCloud_AWSServerless.DirectoryInsights/3.0.0"
     }
 
-    MAX_EVENTS_PER_WORKER = 1 
+    MAX_EVENTS_PER_WORKER = 5000
 
     for service in serviceList:
         if service not in availableServices:
@@ -86,10 +86,11 @@ def jc_orchestrator(event, context):
         try:
             response = requests.post(count_url, json=count_body, headers=headers)
             response.raise_for_status()
-            total_events = json.loads(response.text).get('count', 0) # Get the event count
+            total_events = json.loads(response.text).get('count', 0)
         except Exception as e:
-            logger.error(f"Failed to get event count for {service}: {e}")
-            continue
+            logger.warning(f"Failed to get event count for {service}: {e}")
+            logger.info("Defaulting to queueing the full time slice to let SQS handle retries.")
+            total_events = MAX_EVENTS_PER_WORKER # Forces the math below to create exactly 1 chunk
         
         if total_events == 0:
             logger.info(f"No events for {service} between {start_iso} and {end_iso}. Skipping.")
