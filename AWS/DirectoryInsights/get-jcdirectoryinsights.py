@@ -42,7 +42,7 @@ def chunk_time_range(start_time, end_time, chunks):
     return [(start_time + delta * i, start_time + delta * (i + 1)) for i in range(chunks)]
 
 # ==============================================================================
-# 1. THE ORCHESTRATOR FUNCTION
+# ORCHESTRATOR FUNCTION
 # ==============================================================================
 def jc_orchestrator(event, context):
     try:
@@ -99,7 +99,7 @@ def jc_orchestrator(event, context):
         # Slice the time if there are too many events
         num_chunks = max(1, int((total_events // MAX_EVENTS_PER_WORKER) + 1))
         time_slices = chunk_time_range(previousTime, now, num_chunks)
-        logger.info(f"Chuncks: {num_chunks}")
+        logger.info(f"Chunks: {num_chunks}")
         logger.info(f"Slices: {time_slices}")
         
         
@@ -119,7 +119,7 @@ def jc_orchestrator(event, context):
     return {"statusCode": 200, "body": "Orchestration complete"}
 
 # ==============================================================================
-# 2. THE WORKER FUNCTION
+# WORKER FUNCTION
 # ==============================================================================
 def jc_worker(event, context):
     try:
