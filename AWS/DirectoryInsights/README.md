@@ -2,13 +2,14 @@
 
 _This document will walk a JumpCloud Administrator through packaging and deploying this Serverless Application manually. This workflow is intended for those who need to make modifications to the code or tie this solution into other AWS resources. If you would simply like to deploy this Serverless Application as-is, you can do so from the [Serverless Application Repository](https://serverlessrepo.aws.amazon.com/applications/us-east-2/339347137473/JumpCloud-DirectoryInsights)_
 
-_Note: This document assumes the use of Python 3.9+_
+_Note: This document assumes the use of Python 3.14+_
 
 ## Table of Contents
 
 - [Gather JumpCloud Directory Insights Data with an AWS Serverless Application](#gather-jumpcloud-directory-insights-data-with-an-aws-serverless-application)
   - [Table of Contents](#table-of-contents)
   - [Pre-requisites](#pre-requisites)
+  - [Architecture Overview](#architecture-overview)
   - [Create Python Script](#create-python-script)
   - [Create SAM Template](#create-sam-template)
   - [Package and Deploy the Application](#package-and-deploy-the-application)
@@ -17,6 +18,7 @@ _Note: This document assumes the use of Python 3.9+_
     - [Formatting JSON](#formatting-json)
     - [Note on data](#note-on-data)
     - [Note on Lamda resource memory](#note-on-lamda-resource-memory)
+    - [Troubleshooting Failed Runs](#troubleshooting-failed-runs)
 
 ## Pre-requisites
 
@@ -48,6 +50,15 @@ _Note: This document assumes the use of Python 3.9+_
       ]
     }
     ```
+
+## Architecture Overview
+
+
+
+* **EventBridge Cron:** Triggers the Orchestrator Lambda on a defined schedule (e.g., every 5 minutes).
+* **Orchestrator Lambda (128MB):** Calculates the exact time window since the last run, queries JumpCloud for the total event count, and mathematically divides the timeline into smaller, manageable chunks (e.g., 50,000 events per chunk). It pushes these chunks as separate jobs into SQS.
+* **Amazon SQS Queue:** Holds the time-slice jobs. It features a 15-minute visibility timeout and automatically retries failed jobs up to 3 times before moving them to a Dead Letter Queue (DLQ).
+* **Worker Lambdas (1024MB):** Triggered concurrently by SQS. Each worker picks up a single time slice, paginates through the JumpCloud API to download the events, compresses them into a `.json.gz` file, and uploads it directly to Amazon S3.
 
 ## Create Python Script
 
@@ -147,3 +158,15 @@ The `JsonData.json` file can be saved to an S3 bucket to store a 'backup' of all
 ### Note on Lamda resource memory
 
 The Lambda function memory settings `MemorySize` in the `serverless.yaml` file can be adjusted to optimize performance and cost. Currently, `MemorySize` is set to `512` megabytes. Administrators are encouraged to experiment with different memory allocations to find the optimal configuration for their specific workload. Increasing memory can improve performance for compute-intensive tasks, while decreasing it can reduce costs for less demanding operations.
+
+### Troubleshooting Failed Runs
+
+Because this architecture uses Amazon SQS, any Worker Lambda executions that fail repeatedly (e.g., due to temporary JumpCloud API rate limits, invalid API keys, or memory timeouts) will automatically be sent to a **Dead Letter Queue (DLQ)** after 3 unsuccessful attempts.
+
+If you suspect data is missing for a certain time window, or if you want to investigate a failed run, follow these steps:
+
+1. **Check the DLQ:** Navigate to the [Amazon SQS Console](https://console.aws.amazon.com/sqs/) and look for the queue ending in `-DLQ`. If the "Messages available" count is greater than `0`, you have failed chunks of data waiting to be processed.
+2. **Inspect the Failed Payload:** Click into the DLQ and select **Send and receive messages** -> **Poll for messages** to see the exact `service`, `start_time`, and `end_time` that failed.
+3. **Check CloudWatch Logs:** Navigate to the **CloudWatch Logs** for your Lambda `WorkerFunction`. Search the log streams around the timeframe the message failed to identify the exact error (e.g., "Memory Size Exceeded", "Task timed out after 900.00 seconds", or "401 Unauthorized"). *(Note: You can also check the `OrchestratorFunction` logs if you suspect an issue with the initial cron trigger or API chunking).*
+4. **Fix the Root Cause:** Resolve the issue based on the CloudWatch logs. For example, you may need to update an expired API key in Secrets Manager or increase the `MemorySize` in your `serverless.yaml` template and redeploy.
+5. **Redrive the Messages:** Once the underlying issue is fixed, go back to the SQS Console, select your DLQ, and click **Start DLQ redrive**. This will automatically push the failed time-slices back into your main queue so the Worker Lambdas can successfully process them and upload the data to S3.
