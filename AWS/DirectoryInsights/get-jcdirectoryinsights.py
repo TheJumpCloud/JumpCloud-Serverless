@@ -18,7 +18,7 @@ def get_secret(secret_name):
 def get_cron_time(cronExpression, timeTolerance):
     """Checks if the current time is within a tolerance of the cron schedule."""
     # Use UTC explicitly to prevent timezone mismatch
-    now = datetime.datetime.utcnow() 
+    now = datetime.datetime.now(datetime.timezone.utc)
     cronParts = cronExpression.split()
     cronExpression = " ".join(cronParts[:5])
     try:
@@ -61,7 +61,7 @@ def jc_orchestrator(event, context):
     
     sqs = boto3.client('sqs')
     
-    availableServices = ['all','alerts','directory','password_manager','sso','radius','systems','software','mdm','object_storage','saas_app_management','access_management']
+    availableServices = ['all', 'access_management', 'alerts', 'asset_management', 'directory', 'ldap', 'mdm', 'notifications', 'object_storage', 'password_manager', 'radius', 'reports', 'saas_app_management', 'software', 'sso', 'systems', 'workflows']
     serviceList = ((service_env.replace(" ", "")).lower()).split(",")
     
     # If 'all' is in the list, just use 'all' and drop the duplicates
@@ -78,7 +78,7 @@ def jc_orchestrator(event, context):
     if orgId != '':                 
         headers['x-org-id'] = orgId
 
-    MAX_EVENTS_PER_WORKER = 5000
+    MAX_EVENTS_PER_WORKER = 25000
 
     for service in serviceList:
         if service not in availableServices:
@@ -96,6 +96,9 @@ def jc_orchestrator(event, context):
             response = requests.post(count_url, json=count_body, headers=headers)
             response.raise_for_status()
             total_events = json.loads(response.text).get('count', 0)
+            # Count log
+            logger.info(f"Total events for {service}: {total_events}")
+        
         except Exception as e:
             logger.warning(f"Failed to get event count for {service}: {e}")
             logger.info("Defaulting to queueing the full time slice to let SQS handle retries.")

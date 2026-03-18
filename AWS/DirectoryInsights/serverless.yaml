@@ -17,7 +17,7 @@ Parameters:
   Service:
     Type: String
     Default: "all"
-    Description: 'Comma-delimited list of desired services to log. Available services: alerts, all, directory, ldap, mdm, object_storage, password_manager, radius, reports, saas_app_management, software, sso, systems, access_management . Default value is "all"'
+    Description: 'Comma-delimited list of desired services to log. Available services: all, access_management, alerts, asset_management, directory, ldap, mdm, notifications, object_storage, password_manager, radius, reports, saas_app_management, software, sso, systems, workflows. Default value is "all"'
   JsonFormat:
     Type: String
     AllowedValues:
@@ -191,7 +191,7 @@ Resources:
     Properties:
       CodeUri: get-jcdirectoryinsights.zip
       Handler: get-jcdirectoryinsights.jc_worker
-      MemorySize: 1024
+      MemorySize: 512
       Timeout: 900
       Runtime: python3.14
       Role: !GetAtt WorkerRole.Arn
