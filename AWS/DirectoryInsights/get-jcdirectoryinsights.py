@@ -85,8 +85,8 @@ def jc_orchestrator(event, context):
             logger.error(f"Unknown service: {service}")
             continue
 
-        start_iso = previousTime.isoformat("T") + "Z"
-        end_iso = now.isoformat("T") + "Z"
+        start_iso = previousTime.isoformat("T").replace("+00:00", "Z")
+        end_iso = now.isoformat("T").replace("+00:00", "Z")
         
         # Hit the count endpoint to see if we even need to pull data
         count_url = "https://api.jumpcloud.com/insights/directory/v1/events/count"
@@ -119,8 +119,8 @@ def jc_orchestrator(event, context):
         for slice_start, slice_end in time_slices:
             message_body = {
                 'service': service,
-                'start_time': slice_start.isoformat("T") + "Z",
-                'end_time': slice_end.isoformat("T") + "Z"
+                'start_time': slice_start.isoformat("T").replace("+00:00", "Z"),
+                'end_time': slice_end.isoformat("T").replace("+00:00", "Z")
             }
             sqs.send_message(
                 QueueUrl=queueUrl,
