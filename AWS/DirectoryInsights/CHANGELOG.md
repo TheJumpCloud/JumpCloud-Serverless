@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.0.0] - 2026-03-20
+
+### Added
+
+- Added an Amazon SQS event-driven architecture to safely process massive event volumes (1M+ events) without hitting Lambda memory limits or execution timeouts.
+
+- Introduced an Orchestrator-Worker pattern to enable concurrent, parallel processing of data chunks, significantly speeding up ingestion times.
+
+- Added a Dead Letter Queue (DLQ) and automatic retry mechanism to gracefully handle temporary JumpCloud API rate limits or network timeouts without dropping data.
+
 ## [2.1.0] - 2025-12-16
 
 ### Added
