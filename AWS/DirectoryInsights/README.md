@@ -2,21 +2,26 @@
 
 _This document will walk a JumpCloud Administrator through packaging and deploying this Serverless Application manually. This workflow is intended for those who need to make modifications to the code or tie this solution into other AWS resources. If you would simply like to deploy this Serverless Application as-is, you can do so from the [Serverless Application Repository](https://serverlessrepo.aws.amazon.com/applications/us-east-2/339347137473/JumpCloud-DirectoryInsights)_
 
-_Note: This document assumes the use of Python 3.9+_
+_Note: This document assumes the use of Python 3.14+_
 
 ## Table of Contents
 
 - [Gather JumpCloud Directory Insights Data with an AWS Serverless Application](#gather-jumpcloud-directory-insights-data-with-an-aws-serverless-application)
   - [Table of Contents](#table-of-contents)
   - [Pre-requisites](#pre-requisites)
+  - [Architecture Overview](#architecture-overview)
   - [Create Python Script](#create-python-script)
   - [Create SAM Template](#create-sam-template)
   - [Package and Deploy the Application](#package-and-deploy-the-application)
     - [Packaging the Application](#packaging-the-application)
     - [Deploying the Application](#deploying-the-application)
     - [Formatting JSON](#formatting-json)
-    - [Note on data](#note-on-data)
-    - [Note on Lamda resource memory](#note-on-lamda-resource-memory)
+  - [Updating an Existing Deployment](#updating-an-existing-deployment)
+  - [Clean Up / Uninstall](#clean-up--uninstall)
+  - [Note on Data Chunking (MAX\_EVENTS\_PER\_WORKER)](#note-on-data-chunking-max_events_per_worker)
+    - [How Chunked Files Appear in S3](#how-chunked-files-appear-in-s3)
+  - [Note on Lambda resource memory](#note-on-lambda-resource-memory)
+    - [Troubleshooting Failed Runs](#troubleshooting-failed-runs)
 
 ## Pre-requisites
 
@@ -48,6 +53,14 @@ _Note: This document assumes the use of Python 3.9+_
       ]
     }
     ```
+## Architecture Overview
+
+* **EventBridge Cron:** Triggers the Orchestrator Lambda on a defined schedule. For example: `0/30 * * * ? *` = Every 30 minutes.
+* **Orchestrator Lambda (128MB):** Calculates the exact time window since the last run, queries JumpCloud for the total event count, and mathematically divides the timeline into smaller, manageable chunks (e.g., 25,000 events per chunk). It pushes these chunks as separate jobs into SQS and runs each in parallel.
+* **Amazon SQS Queue:** Holds the time-slice jobs. It features a 15-minute visibility timeout and automatically retries failed jobs up to 3 times before moving them to a Dead Letter Queue (DLQ).
+* **Worker Lambdas (512MB):** Triggered concurrently by SQS. Each worker picks up a single time slice, paginates through the JumpCloud API to download the events, compresses them into a `.json.gz` file, and uploads it directly to Amazon S3.
+* **Dead Letter Queue (DLQ):** Acts as a secure fail-safe for any jobs that fail their retry attempts (e.g., due to temporary JumpCloud API rate limits, invalid API keys, or memory exhaustion). It isolates these failed time-slices to ensure zero data loss, allowing administrators to investigate the logs, fix the root cause, and "redrive" the jobs back into the main queue for successful processing.
+
 
 ## Create Python Script
 
@@ -133,17 +146,62 @@ SingleLine Format:
 MultiLine Format:
 ![Alt text](image-1.png)
 
-### Note on data
+## Updating an Existing Deployment
+To update your existing application to a newer version, simply pull the latest code, re-package the ZIP file, and run the `sam package` and `aws cloudformation deploy` commands again using the **exact same `--stack-name`**. AWS CloudFormation will automatically detect the changes and safely update your existing resources.
 
-This application will only gather data per the interval scheduled during deployment. I.e. If the app is configured to gather data each day. The app will gather the data from the last day and create a schedule to gather the next day data and so on. To gather data past this interval, please use our [PowerShell Module](https://github.com/TheJumpCloud/support/wiki/Using-the-JumpCloud-PowerShell-Module):
+## Clean Up / Uninstall
 
-```powershell
-$data = Get-JCEvent -Service:('all') -StartTime:((Get-date).AddDays(-90))
-$data | ConvertTo-Json -Depth 99 | Out-file ./JsonData.json
+If you no longer need this application and want to avoid incurring future AWS charges, you can delete the CloudFormation stack. 
+
+*Note: Deleting the stack will NOT delete the Amazon S3 bucket containing your previously gathered logs, you must delete it manually.*
+
+To delete the stack via the AWS CLI:
+```bash
+aws cloudformation delete-stack --stack-name <YOUR STACK NAME>
 ```
 
-The `JsonData.json` file can be saved to an S3 bucket to store a 'backup' of all available data.
+## Note on Data Chunking (MAX_EVENTS_PER_WORKER)
 
-### Note on Lamda resource memory
+To prevent the Worker Lambdas from timing out or running out of memory, the Orchestrator mathematically divides large data pulls into smaller, parallel "chunks." 
 
-The Lambda function memory settings `MemorySize` in the `serverless.yaml` file can be adjusted to optimize performance and cost. Currently, `MemorySize` is set to `512` megabytes. Administrators are encouraged to experiment with different memory allocations to find the optimal configuration for their specific workload. Increasing memory can improve performance for compute-intensive tasks, while decreasing it can reduce costs for less demanding operations.
+By default, the application is configured to process a maximum of **25,000 events per chunk**. This limit is hardcoded via the `MAX_EVENTS_PER_WORKER` variable inside the `get-jcdirectoryinsights.py` script. 
+
+Administrators who wish to modify the code can adjust this variable based on their needs:
+* **Decrease the limit (e.g., 10,000):** Generates smaller, more frequent `.json.gz` files and further reduces the Worker Lambda memory footprint.
+* **Increase the limit (e.g., 50,000):** Generates fewer, larger `.json.gz` files and reduces the total number of SQS messages sent, but will consume more memory per Worker execution.
+
+To modify this limit, open `get-jcdirectoryinsights.py`, locate `MAX_EVENTS_PER_WORKER = 25000` inside the `jc_orchestrator` function, update the integer, and re-run the `sam package` and deploy commands. Or edit the code directly from Lambda in AWS Console.
+
+### How Chunked Files Appear in S3
+
+Because the Orchestrator divides a single scheduled run into multiple smaller timeframes, you will see multiple `.json.gz` files in your S3 bucket for a single execution if the event count exceeds the `MAX_EVENTS_PER_WORKER` limit.
+
+The files are automatically named with their specific, chunked time slices (`start_time` to `end_time`). 
+
+**Example:**
+If your application runs every 15 minutes (e.g., `14:00:00Z` to `14:15:00Z`) and pulls **50,000** directory events, a chunk limit of **25,000** will result in **2** separate files in S3, split perfectly in half:
+* `jc_directoryinsights_directory_2026-03-19T14-00-00Z_2026-03-19T14-07-30Z.json.gz`
+* `jc_directoryinsights_directory_2026-03-19T14-07-30Z_2026-03-19T14-15-00Z.json.gz`
+
+If your SIEM or log forwarder monitors this S3 bucket, it will naturally ingest these sequential files without any issues or duplicate data.
+
+## Note on Lambda resource memory
+
+Because this application uses a split architecture to handle high volumes of data, there are two distinct Lambda memory settings (`MemorySize`) in the `serverless.yaml` file:
+
+* **OrchestratorFunction:** Currently set to `128` megabytes. Since this function only calculates time slices and queues messages, it requires minimal memory. 
+* **WorkerFunction:** Currently set to `512` megabytes. This function does the heavy lifting of paginating through the JumpCloud API, processing the data, and compressing the JSON payloads.
+
+Administrators are encouraged to experiment with different memory allocations to find the optimal configuration for their specific workload. Increasing the Worker memory can improve performance and prevent out-of-memory errors on massive data pulls, while decreasing it can reduce costs for less demanding operations.
+
+### Troubleshooting Failed Runs
+
+Because this architecture uses Amazon SQS, any Worker Lambda executions that fail repeatedly (e.g., due to temporary JumpCloud API rate limits, invalid API keys, or memory timeouts) will automatically be sent to a **Dead Letter Queue (DLQ)** after 3 unsuccessful attempts.
+
+If you suspect data is missing for a certain time window, or if you want to investigate a failed run, follow these steps:
+
+1. **Check the DLQ:** Navigate to the [Amazon SQS Console](https://console.aws.amazon.com/sqs/) and look for the queue ending in `-DLQ`. If the "Messages available" count is greater than `0`, you have failed chunks of data waiting to be processed.
+2. **Inspect the Failed Payload:** Click into the DLQ and select **Send and receive messages** -> **Poll for messages** to see the exact `service`, `start_time`, and `end_time` that failed.
+3. **Check CloudWatch Logs:** Navigate to the **CloudWatch Logs** for your Lambda `WorkerFunction`. Search the log streams around the timeframe the message failed to identify the exact error (e.g., "Memory Size Exceeded", "Task timed out after 900.00 seconds", or "401 Unauthorized"). *(Note: You can also check the `OrchestratorFunction` logs if you suspect an issue with the initial cron trigger or API chunking).*
+4. **Fix the Root Cause:** Resolve the issue based on the CloudWatch logs. For example, you may need to update an expired API key in Secrets Manager or increase the `MemorySize` in your `serverless.yaml` template and redeploy.
+5. **Redrive the Messages:** Once the underlying issue is fixed, go back to the SQS Console, select your DLQ, and click **Start DLQ redrive**. This will automatically push the failed time-slices back into your main queue so the Worker Lambdas can successfully process them and upload the data to S3.

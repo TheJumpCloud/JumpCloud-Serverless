@@ -1,188 +1,222 @@
-import requests, datetime, json, boto3, os, gzip, logging, croniter
+import os, json, boto3, requests, gzip, logging, datetime, math
 from botocore.exceptions import ClientError
 from croniter import croniter
 
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 def get_secret(secret_name):
-    """Retrieves the secret value from AWS Secrets Manager.
-    Args:
-        secret_name: The name of the secret.
-    Returns:
-        secret: The secret value.
-    """
+    """Retrieves the secret value from AWS Secrets Manager."""
     client = boto3.client(service_name='secretsmanager')
     try:
-        get_secret_value_response = client.get_secret_value(SecretId=secret_name)
+        response = client.get_secret_value(SecretId=secret_name)
+        return response['SecretString']
     except ClientError as e:
+        logger.error(f"Error retrieving secret: {e}")
         raise Exception(e)
-    secret = get_secret_value_response['SecretString']
-    return secret
 
 def get_cron_time(cronExpression, timeTolerance):
-    """
-    Checks if the current time is within a tolerance of the cron schedule.
-
-    Args:
-        cronExpression: The cron expression.
-        timeTolerance: The tolerance in seconds/timeDelta.
-
-    Returns:
-        currentCronTime: The next run time of the cron schedule.
-        previousCronTime: The previous run time of the cron schedule.
-    """
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    now = datetime.datetime.now()
-    # Get the first 5 fields of the cron expression
+    """Checks if the current time is within a tolerance of the cron schedule."""
+    # Use UTC explicitly to prevent timezone mismatch
+    now = datetime.datetime.now(datetime.timezone.utc)
     cronParts = cronExpression.split()
-    cronExpression = " ".join(cronParts[:5]) # Get the first 5 fields of the cron expression, this will not include the year field
-    logger.info(f'Cron Expression: {cronExpression}')
+    cronExpression = " ".join(cronParts[:5])
     try:
-        cronTime = croniter(cronExpression, now - datetime.timedelta(seconds=timeTolerance))  # get the previous time with 59 seconds of tolerance
-        currentCronTime = cronTime.get_next(datetime.datetime)  # get the next run time from that previous time.
-        previousCronTime = cronTime.get_prev(datetime.datetime)  # get the previous run time
-        logger.info(f'Current Cron Time: {currentCronTime}')
-        logger.info(f'Previous Cron Time: {previousCronTime}')
-        # time_diff = abs((now - previousCronTime).total_seconds())
+        # Add the tolerance (instead of subtracting) in case EventBridge fires a few seconds late
+        cronTime = croniter(cronExpression, now + datetime.timedelta(seconds=timeTolerance))
+        
+        # Get the most recent scheduled cron tick (e.g. 18:50:00)
+        currentCronTime = cronTime.get_prev(datetime.datetime)
+        
+        # Get the scheduled cron tick right before that one (e.g. 18:45:00)
+        previousCronTime = cronTime.get_prev(datetime.datetime)
+        
         return currentCronTime, previousCronTime
     except Exception as e:
         logger.error(f"Error in cron expression: {e}")
-        # Exit the code and raise an exception
         raise Exception(e)
 
-def jc_directoryinsights(event, context):
-    """
-    Lambda function to get directory insights from JumpCloud and upload to S3.
+def chunk_time_range(start_time, end_time, chunks):
+    """Splits a time range into an array of smaller time ranges."""
+    delta = (end_time - start_time) / chunks
+    return [(start_time + delta * i, start_time + delta * (i + 1)) for i in range(chunks)]
 
-    Args:
-        event: The event object.
-        context: The context object.
-
-    Returns:
-        None
-    """
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+# ==============================================================================
+# ORCHESTRATOR FUNCTION
+# ==============================================================================
+def jc_orchestrator(event, context):
     try:
         jcapikeyarn = os.environ['JcApiKeyArn']
+        orgId = os.environ.get('OrgId', '')
         cronExpression = os.environ['CronExpression']
-        bucketName = os.environ['BucketName']
-        service = os.environ['service']
-        orgId = os.environ['OrgId']
-        JsonFormat = os.environ['JsonFormat']
+        queueUrl = os.environ['SqsQueueUrl']
+        service_env = os.environ['service']
     except KeyError as e:
+        logger.error(f"Missing env var: {e}")
         raise Exception(e)
-    
+
     jcapikey = get_secret(jcapikeyarn)
-    timeTolerance=10
-    now, previousTime = get_cron_time(cronExpression, timeTolerance) # get the current time and previous time
-    nowSeconds = now.second
+    timeTolerance = 10
+    now, previousTime = get_cron_time(cronExpression, timeTolerance)
     
-
-    # Convert to ISO format
-    startDate = previousTime.isoformat("T") + "Z"
-    endDate = now.isoformat("T") + "Z"
+    sqs = boto3.client('sqs')
     
-    # If the cronTime is not within the tolerance, error out
-    if nowSeconds >= timeTolerance:
-        # Timestamps of the cron schedule
-        logger.info(f'Timestamps of the cron schedule: {startDate}, {endDate}')
-        # Print an instruction to run the powershell script manually and save it to the S3 bucket
-        logger.info(f"Please run the powershell script manually and save it to the S3 bucket: {bucketName}")
-        logger.info(f'service: {service},\n start-date: {startDate},\n end-date: {endDate},\n *** Powershell Script *** \n $sourcePath =  "<directory_path>/jc_directoryinsights_{startDate}_{endDate}.json" \n Get-JCEvent -service {service} -startTime {startDate} -EndTime {endDate} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
+    availableServices = ['all', 'access_management', 'alerts', 'asset_management', 'directory', 'ldap', 'mdm', 'notifications', 'object_storage', 'password_manager', 'radius', 'reports', 'saas_app_management', 'software', 'sso', 'systems', 'workflows']
+    serviceList = ((service_env.replace(" ", "")).lower()).split(",")
+    
+    # If 'all' is in the list, just use 'all' and drop the duplicates
+    if 'all' in serviceList and len(serviceList) > 1:
+        logger.warning("Configuration contains 'all' alongside specific services. Defaulting to 'all' to prevent duplicate data ingestion.")
+        serviceList = ['all']
+    
+    headers = {
+        'x-api-key': jcapikey,
+        'content-type': "application/json",
+        'user-agent': "JumpCloud_AWSServerless.DirectoryInsights/3.0.0"
+    }
+    # Inject the OrgId into the headers if it exists
+    if orgId != '':                 
+        headers['x-org-id'] = orgId
 
-        raise Exception("Cron time is not within the tolerance.") # This will exit the code
+    MAX_EVENTS_PER_WORKER = 25000
 
-    outfileName = "jc_directoryinsights_" + startDate + "_" + endDate + ".json.gz"
-    availableServices = ['all','alerts','directory','password_manager','sso','radius','systems','software','mdm','object_storage','saas_app_management','access_management']
-    serviceList = ((service.replace(" ", "")).lower()).split(",")
     for service in serviceList:
         if service not in availableServices:
-            raise Exception(f"Unknown service: {service}")
-    if 'all' in serviceList and len(serviceList) > 1:
-            raise Exception(f"Error - Service List contains 'all' and additional services : {serviceList}")
-    finalData = []
+            logger.error(f"Unknown service: {service}")
+            continue
 
-    if len(serviceList) > 1:
-        for service in serviceList:
-            logger.info(f'service: {service},\n start-date: {startDate},\n end-date: {endDate},\n *** Powershell Script *** \n $sourcePath =  "<directory_path>/jc_directoryinsights_{startDate}_{endDate}.json" \n Get-JCEvent -service {service} -startTime {startDate} -EndTime {endDate} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
-    else: 
-            logger.info(f'service: {service},\n start-date: {startDate},\n end-date: {endDate},\n *** Powershell Script *** \n $sourcePath =  "<directory_path>/jc_directoryinsights_{startDate}_{endDate}.json" \n Get-JCEvent -service {service} -startTime {startDate} -EndTime {endDate} | ConvertTo-Json -Depth 99 | Out-File -FilePath $sourcePath \n $newFileName = "$($sourcePath).gz" \n $srcFileStream = New-Object System.IO.FileStream($sourcePath,([IO.FileMode]::Open),([IO.FileAccess]::Read),([IO.FileShare]::Read)) \n $dstFileStream = New-Object System.IO.FileStream($newFileName,([IO.FileMode]::Create),([IO.FileAccess]::Write),([IO.FileShare]::None)) \n $gzip = New-Object System.IO.Compression.GZipStream($dstFileStream,[System.IO.Compression.CompressionLevel]::SmallestSize) \n $srcFileStream.CopyTo($gzip) \n $gzip.Dispose() \n $srcFileStream.Dispose() \n $dstFileStream.Dispose()\n *** End Script ***' )
-            
-    for service in serviceList:
+        start_iso = previousTime.isoformat("T").replace("+00:00", "Z")
+        end_iso = now.isoformat("T").replace("+00:00", "Z")
+        
+        # Hit the count endpoint to see if we even need to pull data
+        count_url = "https://api.jumpcloud.com/insights/directory/v1/events/count"
+        count_body = {'service': [service], 'start_time': start_iso, 'end_time': end_iso}
+        
+        try:
+            response = requests.post(count_url, json=count_body, headers=headers)
+            response.raise_for_status()
+            total_events = json.loads(response.text).get('count', 0)
+            # Count log
+            logger.info(f"Total events for {service}: {total_events}")
+        
+        except Exception as e:
+            logger.warning(f"Failed to get event count for {service}: {e}")
+            logger.info("Defaulting to queueing the full time slice to let SQS handle retries.")
+            total_events = MAX_EVENTS_PER_WORKER # Forces the math below to create exactly 1 chunk
+        
+        if total_events == 0:
+            logger.info(f"No events for {service} between {start_iso} and {end_iso}. Skipping.")
+            continue 
+
+        # Slice the time if there are too many events
+        num_chunks = max(1, math.ceil(total_events / MAX_EVENTS_PER_WORKER))
+        time_slices = chunk_time_range(previousTime, now, num_chunks)
+        logger.info(f"Chunks: {num_chunks}")
+        logger.info(f"Slices: {time_slices}")
+        
+        
+        # Queue the jobs into SQS
+        for slice_start, slice_end in time_slices:
+            message_body = {
+                'service': service,
+                'start_time': slice_start.isoformat("T").replace("+00:00", "Z"),
+                'end_time': slice_end.isoformat("T").replace("+00:00", "Z")
+            }
+            sqs.send_message(
+                QueueUrl=queueUrl,
+                MessageBody=json.dumps(message_body)
+            )
+            logger.info(f"Queued job for {service}: {message_body['start_time']} to {message_body['end_time']}")
+
+    return {"statusCode": 200, "body": "Orchestration complete"}
+
+# ==============================================================================
+# WORKER FUNCTION
+# ==============================================================================
+def jc_worker(event, context):
+    try:
+        jcapikeyarn = os.environ['JcApiKeyArn']
+        bucketName = os.environ['BucketName']
+        orgId = os.environ.get('OrgId', '')
+        JsonFormat = os.environ.get('JsonFormat', 'MultiLine')
+    except KeyError as e:
+        logger.error(f"Missing environment variable: {e}")
+        raise Exception(e)
+
+    jcapikey = get_secret(jcapikeyarn)
+    
+    for record in event['Records']:
+        payload = json.loads(record['body'])
+        service = payload['service']
+        startDate = payload['start_time']
+        endDate = payload['end_time']
+        
+        logger.info(f"Processing {service} from {startDate} to {endDate}")
+
         url = "https://api.jumpcloud.com/insights/directory/v1/events"
         body = {
-            'service': [f"{service}"],
+            'service': [service],
             'start_time': startDate,
             'end_time': endDate,
             "limit": 10000
         }
+        
         headers = {
             'x-api-key': jcapikey,
             'content-type': "application/json",
-            'user-agent': "JumpCloud_AWSServerless.DirectoryInsights/2.0.2"
+            'user-agent': "JumpCloud_AWSServerless.DirectoryInsights/3.0.0"
         }
         if orgId != '':
             headers['x-org-id'] = orgId
-        response = requests.post(url, json=body, headers=headers)
+            
+        finalData = []
+        
         try:
+            response = requests.post(url, json=body, headers=headers)
             response.raise_for_status()
         except requests.exceptions.HTTPError as e:
+            logger.error(f"Error fetching data: {e}")
             raise Exception(e)
-        responseBody = json.loads(response.text)
-        if response.text.strip() == "[]":
-            cloudwatch = boto3.client('cloudwatch')
-            metric = cloudwatch.put_metric_data(
-                MetricData=[
-                    {
-                        'MetricName': f'NoResults_{service}',
-                        'Dimensions': [
-                            {
-                                'Name': 'JumpCloud',
-                                'Value': 'DirectoryInsightsServerlessApp'
-                            },
-                            {
-                                'Name': 'Version',
-                                'Value': '2.0.2'
-                            }
-                        ],
-                        'Unit': 'None',
-                        'Value': 1
-                    },
-                ],
-                Namespace = 'JumpCloudDirectoryInsights'
-            )
-            continue
-        data = responseBody
             
-        while (response.headers["X-Result-Count"] >= response.headers["X-Limit"]):
+        if response.text.strip() == "[]":
+            logger.info(f"No results found for {service} in this time slice.")
+            continue
+            
+        data = json.loads(response.text)
+        
+        # Paginate if needed
+        while int(response.headers.get("X-Result-Count", 0)) >= int(response.headers.get("X-Limit", 10000)):
             body["search_after"] = json.loads(response.headers["X-Search_After"])
             response = requests.post(url, json=body, headers=headers)
-            try:
-                response.raise_for_status()
-            except requests.exceptions.HTTPError as e:
-                raise Exception(e)
-            responseBody = json.loads(response.text)
-            data = data + responseBody
+            response.raise_for_status()
+            data += json.loads(response.text)
+            
         finalData += data
+
+        if len(finalData) == 0:
+            continue
+            
+        finalData.sort(key=lambda x: x['timestamp'], reverse=True)
+        outfileName = f"jc_directoryinsights_{service}_{startDate}_{endDate}.json.gz"
+        outfileName = outfileName.replace(":", "-") # Safe characters for S3
+        tmpFilePath = f"/tmp/{outfileName}"
         
-    if len(finalData) == 0:
-        return
-    finalData.sort(key = lambda x:x['timestamp'], reverse=True)
-    try:
-        gzOutfile = gzip.GzipFile(filename="/tmp/" + outfileName, mode="w", compresslevel=9)
-        print ("Indent: " + JsonFormat)
-        if JsonFormat == "SingleLine":
-             gzOutfile.write(('[' + ',\n'.join(json.dumps(i) for i in data) + ']').encode('UTF-8'))
-             gzOutfile.close()
-        else:
-            gzOutfile.write(json.dumps(finalData, indent=2).encode("UTF-8"))
-            gzOutfile.close()
-           
-    except Exception as e:
-        raise Exception(e)
-    try:
-        s3 = boto3.client('s3')
-        s3.upload_file("/tmp/" + outfileName, bucketName, outfileName)
-    except ClientError as e:
-        raise Exception(e)
+        try:
+            with gzip.GzipFile(filename=tmpFilePath, mode="w", compresslevel=9) as gzOutfile:
+                if JsonFormat == "SingleLine":
+                    gzOutfile.write(('[' + ',\n'.join(json.dumps(i) for i in finalData) + ']').encode('UTF-8'))
+                else:
+                    gzOutfile.write(json.dumps(finalData, indent=2).encode("UTF-8"))
+        except Exception as e:
+            logger.error(f"Error compressing file: {e}")
+            raise Exception(e)
+
+        try:
+            s3 = boto3.client('s3')
+            s3.upload_file(tmpFilePath, bucketName, outfileName)
+            logger.info(f"Successfully uploaded {outfileName} to {bucketName}")
+        except ClientError as e:
+            logger.error(f"Error uploading to S3: {e}")
+            raise Exception(e)
+            
+    return {"statusCode": 200, "body": "Worker process complete"}

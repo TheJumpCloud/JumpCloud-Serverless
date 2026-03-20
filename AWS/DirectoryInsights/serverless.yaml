@@ -17,7 +17,7 @@ Parameters:
   Service:
     Type: String
     Default: "all"
-    Description: 'Comma-delimited list of desired services to log. Available services: alerts, all, directory, ldap, mdm, object_storage, password_manager, radius, reports, saas_app_management, software, sso, systems, access_management . Default value is "all"'
+    Description: 'Comma-delimited list of desired services to log. Available services: all, access_management, alerts, asset_management, directory, ldap, mdm, notifications, object_storage, password_manager, radius, reports, saas_app_management, software, sso, systems, workflows. Default value is "all"'
   JsonFormat:
     Type: String
     AllowedValues:
@@ -31,38 +31,18 @@ Metadata:
     Name: JumpCloud-DirectoryInsights
     Description: This Serverless Application can be used to collect your JumpCloud Directory Insights data at a regular interval.
     Author: JumpCloud Solutions Architecture
-    SemanticVersion: 2.1.1
+    SemanticVersion: 3.0.0
     HomePageUrl: https://git.io/JJlrZ
     SourceCodeUrl: https://git.io/JJiMo
     LicenseUrl: LICENSE
 
 Resources:
-  DirectoryInsightsRole:
-    Type: AWS::IAM::Role
-    Properties:
-      Description: A role for use in the JumpCloud Directory Insights Serverless App
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-              - lambda.amazonaws.com
-            Action:
-              - 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AWSLambdaExecute
-      Policies:
-        - PolicyName: CloudWatchMetrics
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'cloudwatch:PutMetricData'
-                Resource: '*'
+  # ---------------------------------------------------------
+  # Storage and Encryption
+  # ---------------------------------------------------------
   DirectoryInsightsBucket:
     Type: AWS::S3::Bucket
+
   DirectoryInsightsCmk:
     Type: AWS::KMS::Key
     Properties:
@@ -78,10 +58,12 @@ Resources:
               Fn::Sub: arn:aws:iam::${AWS::AccountId}:root
           Action: kms:*
           Resource: '*'
-        - Sid: Allow use of the key
+        - Sid: Allow use of the key by both Lambdas
           Effect: Allow
           Principal:
-            AWS: !GetAtt [DirectoryInsightsRole, Arn]
+            AWS: 
+              - !GetAtt OrchestratorRole.Arn
+              - !GetAtt WorkerRole.Arn
           Action:
           - kms:DescribeKey
           - kms:Encrypt
@@ -90,11 +72,13 @@ Resources:
           - kms:GenerateDataKey
           - kms:GenerateDataKeyWithoutPlaintext
           Resource: '*'
+
   JcApiKey:
     Type: AWS::SecretsManager::Secret
     Properties:
       Description: JumpCloud API Key
       SecretString: !Ref JumpCloudApiKey
+
   JcApiResourcePolicy:
     Type: AWS::SecretsManager::ResourcePolicy
     Properties:
@@ -104,29 +88,126 @@ Resources:
         Statement:
         - Effect: Allow
           Principal:
-            AWS: !GetAtt DirectoryInsightsRole.Arn
+            AWS: 
+              - !GetAtt OrchestratorRole.Arn
+              - !GetAtt WorkerRole.Arn
           Action: secretsmanager:GetSecretValue
           Resource: "*"
-  DirectoryInsightsFunction:
+
+  # ---------------------------------------------------------
+  # Queues for Orchestrator -> Worker communication
+  # ---------------------------------------------------------
+  JobDLQ:
+    Type: AWS::SQS::Queue
+
+  JobQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 900 # Matches Worker timeout
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt JobDLQ.Arn
+        maxReceiveCount: 3
+
+  # ---------------------------------------------------------
+  # Orchestrator Role & Function
+  # ---------------------------------------------------------
+  OrchestratorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Role for the Orchestrator Lambda
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: OrchestratorPermissions
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt JobQueue.Arn
+
+  OrchestratorFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: get-jcdirectoryinsights.zip
-      Handler: get-jcdirectoryinsights.jc_directoryinsights
-      MemorySize: 512
-      Timeout: 180
+      Handler: get-jcdirectoryinsights.jc_orchestrator
+      MemorySize: 128
+      Timeout: 120
       Runtime: python3.14
-      Role: !GetAtt DirectoryInsightsRole.Arn
+      Role: !GetAtt OrchestratorRole.Arn
       KmsKeyArn: !GetAtt DirectoryInsightsCmk.Arn
       Environment:
         Variables:
           JcApiKeyArn: !Ref JcApiKey
           CronExpression: !Ref CronExpression
           service: !Sub ${Service}
-          BucketName: !Ref DirectoryInsightsBucket
+          SqsQueueUrl: !Ref JobQueue
           OrgId: !Sub ${OrganizationID}
-          JsonFormat: !Sub ${JsonFormat}
       Events:
         ScheduleDirectoryInsightsTrigger:
           Type: Schedule
           Properties:
             Schedule: !Sub "cron(${CronExpression})"
+  # ---------------------------------------------------------
+  # Worker Role & Function
+  # ---------------------------------------------------------
+  WorkerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Role for the Worker Lambda
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSLambdaExecute # Grants S3 PUT and CloudWatch Logs
+      Policies:
+        - PolicyName: WorkerPermissions
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt JobQueue.Arn
+              - Effect: Allow
+                Action: cloudwatch:PutMetricData
+                Resource: '*'
+
+  WorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: get-jcdirectoryinsights.zip
+      Handler: get-jcdirectoryinsights.jc_worker
+      MemorySize: 512
+      Timeout: 900
+      Runtime: python3.14
+      Role: !GetAtt WorkerRole.Arn
+      KmsKeyArn: !GetAtt DirectoryInsightsCmk.Arn
+      Environment:
+        Variables:
+          JcApiKeyArn: !Ref JcApiKey
+          BucketName: !Ref DirectoryInsightsBucket
+          OrgId: !Sub ${OrganizationID}
+          JsonFormat: !Sub ${JsonFormat}
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt JobQueue.Arn
+            BatchSize: 1
+
+
+           
