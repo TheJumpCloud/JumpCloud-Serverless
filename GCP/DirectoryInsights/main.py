@@ -52,7 +52,7 @@ def get_secret(project_id, secret_name):
         response = client.access_secret_version(request={"name": name})
         return response.payload.data.decode("UTF-8")
     except Exception as e:
-        print(f"Error retrieving secret {secret_name}: {e}")
+        print(f"Error retrieving secret: {e}")
         raise Exception(e)
 
 def get_cron_time(cron_expression, time_tolerance):
@@ -109,7 +109,7 @@ def jc_orchestrator(request):
         fetched_id = get_secret(project_id, jc_org_id_secret_name).strip()
         if fetched_id:
             jc_org_id = fetched_id
-            print(f"Org ID loaded: {jc_org_id}")
+            print(f"Org ID loaded")
 
     time_tolerance = 10
     now, previous_time = get_cron_time(cron_schedule, time_tolerance)
