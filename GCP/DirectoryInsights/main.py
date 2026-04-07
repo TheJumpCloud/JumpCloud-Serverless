@@ -352,20 +352,35 @@ def redrive_dlq(request):
             print("DLQ is empty! Nothing to move.")
             return ("DLQ is empty. No messages moved.", 200)
 
+        # 1. Create a list to track the publish operations and their associated ack_ids
+        publish_tasks = []
+
+        for received_message in response.received_messages:
+            # Fire off the publish command and capture the Future
+            future = publisher.publish(topic_path, received_message.message.data)
+            
+            # Store the Future alongside the ack_id and message_id so we can evaluate them together later
+            publish_tasks.append({
+                "future": future,
+                "ack_id": received_message.ack_id,
+                "msg_id": received_message.message.message_id
+            })
+
         ack_ids = []
         moved_count = 0
 
-        for received_message in response.received_messages:
+        # 2. Wait for each publish to finish
+        for task in publish_tasks:
             try:
-                # 1. Forward the raw data back to the main topic
-                publisher.publish(topic_path, received_message.message.data)
+                # This forces the code to wait for confirmation that the main topic received it
+                task["future"].result()
                 
-                # 2. Save the ID so we can delete it from the DLQ
-                ack_ids.append(received_message.ack_id)
+                # If we get here, it succeeded! It is now safe to queue it for deletion from the DLQ
+                ack_ids.append(task["ack_id"])
                 moved_count += 1
             except Exception as e:
-                print(f"Failed to publish message {received_message.message.message_id}: {e}")
-                # We do NOT add to ack_ids so it stays in the DLQ to try again later
+                print(f"Failed to publish message {task['msg_id']}: {e}")
+                # We intentionally do NOT add it to ack_ids, so it safely remains in the DLQ
 
         # 3. Tell the DLQ we successfully moved them, so it can delete them safely
         if ack_ids:
