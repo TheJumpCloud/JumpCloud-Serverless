@@ -149,7 +149,6 @@ def jc_orchestrator(request):
         
         count_url = "https://api.jumpcloud.com/insights/directory/v1/events/count"
         
-        # Omit the service parameter if querying 'all' to prevent 400 Bad Request
         count_body = {'service': [service], 'start_time': start_iso, 'end_time': end_iso}
         
         print(f"[ORCHESTRATOR] Querying Count URL: {count_url} | Service: {service}")
