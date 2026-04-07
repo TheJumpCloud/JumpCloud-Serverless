@@ -158,12 +158,3 @@ steps:
         functionsURL=$$(gcloud functions describe $_ORCHESTRATOR_FUNCTION_NAME --region=$_REGION_LOCATION --format=json)
         url=$$(echo "$$functionsURL" | jq -r '.url')
         gcloud scheduler jobs create http $_SCHEDULE_NAME --location=$_REGION_LOCATION --schedule="$_SCHEDULE_CRON_TIME" --uri="$$url" --http-method=GET --oidc-service-account-email="$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com" || echo "Scheduler job may already exist."
-  # Create Scheduler Job
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: bash
-    args:
-      - -c
-      - |
-        apt-get update && apt-get install -y jq
-        url=$$(gcloud functions describe $_ORCHESTRATOR_FUNCTION_NAME --region=$_REGION_LOCATION --format="value(httpsTrigger.url)")
-        gcloud scheduler jobs create http $_SCHEDULE_NAME --location=$_REGION_LOCATION --schedule="$_SCHEDULE_CRON_TIME" --uri="$$url" --http-method=GET --oidc-service-account-email="$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com" || echo "Exists."
