@@ -363,7 +363,7 @@ def redrive_dlq(request):
                 request={"subscription": subscription_path, "ack_ids": ack_ids}
             )
             
-        result_message = f"🏁 Successfully redelivered {moved_count} messages to {main_topic_id}!"
+        result_message = f"Successfully redelivered {moved_count} messages to {main_topic_id}!"
         print(result_message)
         
         return (result_message, 200)
