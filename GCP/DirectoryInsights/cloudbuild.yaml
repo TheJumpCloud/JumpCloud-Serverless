@@ -8,11 +8,10 @@ substitutions:
   _SCHEDULE_CRON_TIME: "CHANGEVALUE" # Ref: https://crontab.guru/
   _GCP_PROJECT_ID_NAME: "CHANGEVALUE"
   _JSON_FORMAT: "CHANGEVALUE" # MutiLine, SingleLine, NDJson
-  _STORAGE_CLASS: "CHANGEVALUE" # Cloud Storage Class: standard, nearline, coldline, archive
+  _STORAGE_CLASS: "CHANGEVALUE" # Cloud Storage Class: standard, nearline, coldline, archive https://docs.cloud.google.com/storage/docs/storage-classes
   _REGION_LOCATION: "CHANGEVALUE" # https://cloud.google.com/compute/docs/regions-zones
-  _FORCE_RUN_DAYS: "30" # Change this when doing a force run test using the scheduler
   _MAX_EVENTS_PER_WORKER: "25000"
-  _WORKER_MEMORY: "512MB"
+  _WORKER_MEMORY: "512MB" # https://docs.cloud.google.com/run/docs/configuring/services/memory-limits
 
 steps:
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
@@ -64,7 +63,7 @@ steps:
       - --region=$_REGION_LOCATION
       - --source=.
       - --runtime=python312
-      - --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,jc_api_key_secret=${_RESOURCE_PREFIX}-api-key,jc_org_id=${_RESOURCE_PREFIX}-org-id,cron_schedule=$_SCHEDULE_CRON_TIME,service=$_JC_SERVICE,pubsub_topic=${_RESOURCE_PREFIX}-jobs,force_run_days=$_FORCE_RUN_DAYS,max_events_per_worker=$_MAX_EVENTS_PER_WORKER
+      - --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,jc_api_key_secret=${_RESOURCE_PREFIX}-api-key,jc_org_id=${_RESOURCE_PREFIX}-org-id,cron_schedule=$_SCHEDULE_CRON_TIME,service=$_JC_SERVICE,pubsub_topic=${_RESOURCE_PREFIX}-jobs,max_events_per_worker=$_MAX_EVENTS_PER_WORKER
       - --entry-point=jc_orchestrator
       - --trigger-http
       - --no-allow-unauthenticated

@@ -56,24 +56,15 @@ def get_secret(project_id, secret_name):
         raise Exception(e)
 
 def get_cron_time(cron_expression, time_tolerance):
-    """Checks the schedule, with GCP 'Force Run' detection."""
+    """Calculates the current and previous cron execution times."""
     now = datetime.datetime.now(datetime.timezone.utc)
     try:
         cron_time = croniter(cron_expression, now + datetime.timedelta(seconds=time_tolerance))
         current_cron_time = cron_time.get_prev(datetime.datetime)
         previous_cron_time = cron_time.get_prev(datetime.datetime)
-        
-        # GCP "Force Run" Detection
-        if (now - current_cron_time).total_seconds() > 60: 
-            # Grab the requested lookback window from the environment (defaults to 30 days). This functionality is used for testing. Change the force_run_days value on the orchestrator function env variables (max 90 days) 
-            force_days = int(os.environ.get('force_run_days', 30))
-            
-            print(f"Manual Force Run detected! Adjusting search window to exactly {force_days} days from right now.")
-            
-            force_run_start_time = now - datetime.timedelta(days=force_days) 
-            return now, force_run_start_time
             
         return current_cron_time, previous_cron_time
+        
     except Exception as e:
         print(f"Error in cron expression '{cron_expression}': {e}")
         raise Exception(e)
@@ -100,6 +91,15 @@ def jc_orchestrator(request):
         print(f"Missing env var: {e}")
         return f"Missing env var: {e}", 500
 
+    # --- Check for manual test payload from GCP Console ---
+    request_json = request.get_json(silent=True) or {}
+    test_event_days = request_json.get('event_days')
+    test_service = request_json.get('service')
+
+    if test_service:
+        print(f"[TEST MODE] Overriding default service with: {test_service}")
+        service_env = test_service
+
     print("Fetching API Key from Secret Manager...")
     jcapikey = get_secret(project_id, jc_api_key_secret_name)
     
@@ -111,8 +111,24 @@ def jc_orchestrator(request):
             jc_org_id = fetched_id
             print(f"Org ID loaded")
 
-    time_tolerance = 10
-    now, previous_time = get_cron_time(cron_schedule, time_tolerance)
+    # --- Determine Time Window (Test Payload vs Cron Schedule) ---
+    if test_event_days:
+        # Test Mode: Use the provided days back
+        print(f"[TEST MODE] 'event_days' payload detected. Calculating window for the past {test_event_days} days.")
+        try:
+            days_back = int(test_event_days)
+            now = datetime.datetime.now(datetime.timezone.utc)
+            previous_time = now - datetime.timedelta(days=days_back)
+        except ValueError:
+            error_msg = "Invalid 'event_days' value. Must be a whole number (integer)."
+            print(error_msg)
+            return error_msg, 400
+            
+    else:
+        # Production Mode: Normal Cron Run
+        time_tolerance = 10
+        now, previous_time = get_cron_time(cron_schedule, time_tolerance)
+        
     print(f"Search Window: {previous_time} to {now}")
     
     publisher = pubsub_v1.PublisherClient()
@@ -196,6 +212,7 @@ def jc_orchestrator(request):
 
     print("--- ORCHESTRATOR COMPLETE ---")
     return "Orchestration complete", 200
+
 # ==============================================================================
 # WORKER FUNCTION (Triggered by Pub/Sub)
 # ==============================================================================
