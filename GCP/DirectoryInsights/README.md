@@ -1,4 +1,5 @@
 # Gather JumpCloud Directory Insights Data with GCP Services
+
 _This document will walk a JumpCloud Administrator through deploying this Serverless Application to GCP._
 
 _Note: This document assumes the use of Python 3.12 on GCP Cloud Functions_
@@ -36,55 +37,44 @@ The `gcloud builds submit` command orchestrates the creation of the following in
 
 ### 1. Cloud Functions (3 Total)
 
--   **Orchestrator Function:** An HTTP-triggered function that acts as the "brain." It calculates the time window (e.g., the last 5 minutes) and determines how many parallel jobs are needed based on the event count in JumpCloud.
-    
--   **Worker Function:** A background function triggered by Pub/Sub. It performs the heavy lifting: querying the JumpCloud API, paginating through results, sanitizing data for BigQuery compatibility, and uploading compressed GZIP files to Storage.
-    
--   **Redrive Function:** An administrative HTTP function used to move failed messages from the Dead Letter Queue back into the main processing pipeline. Whenever a job fails 5 times, it sits in the DLQ; this function "redrives" those jobs so they can be processed by the Worker again once the issue (like an API outage) is resolved.
-    
+- **Orchestrator Function:** An HTTP-triggered function that acts as the "brain." It calculates the time window (e.g., the last 5 minutes) and determines how many parallel jobs are needed based on the event count in JumpCloud.
+- **Worker Function:** A background function triggered by Pub/Sub. It performs the heavy lifting: querying the JumpCloud API, paginating through results, sanitizing data for BigQuery compatibility, and uploading compressed GZIP files to Storage.
+- **Redrive Function:** An administrative HTTP function used to move failed messages from the Dead Letter Queue back into the main processing pipeline. Whenever a job fails 5 times, it sits in the DLQ; this function "redrives" those jobs so they can be processed by the Worker again once the issue (like an API outage) is resolved.
 
 ### 2. Pub/Sub Messaging Layer
 
--   **Main Topic (`jc-di-jobs`):** The communication channel where the Orchestrator posts job instructions for the Workers to pick up.
-    
--   **Dead Letter Topic (`jc-di-jobs-dlq`):** A safety net topic where jobs are sent if they fail to process after 5 consecutive attempts.
-    
--   **Pull Subscription:** A dedicated subscription on the DLQ topic that holds failed messages until they are redriven or expire.
--   **ReDrive Function:** A dedicated subscription on the DLQ topic that holds failed messages until they are redriven or expire.
-    
+- **Main Topic (`jc-di-jobs`):** The communication channel where the Orchestrator posts job instructions for the Workers to pick up.
+- **Dead Letter Topic (`jc-di-jobs-dlq`):** A safety net topic where jobs are sent if they fail to process after 5 consecutive attempts.
+- **Pull Subscription:** A dedicated subscription on the DLQ topic that holds failed messages until they are redriven or expire.
+- **ReDrive Function:** A dedicated subscription on the DLQ topic that holds failed messages until they are redriven or expire.
 
 ### 3. Cloud Storage
 
--   **Data Bucket:** A permanent storage location for your Directory Insights logs. Files are stored as compressed GZIP files, supporting **MultiLine**, **SingleLine**, or **NDJson** formats.
-    
+- **Data Bucket:** A permanent storage location for your Directory Insights logs. Files are stored as compressed GZIP files, supporting **MultiLine**, **SingleLine**, or **NDJson** formats.
 
 ### 4. Cloud Scheduler
 
--   **Cron Job:** A managed scheduler that pings the Orchestrator at your defined interval (e.g., every 5 minutes) to ensure continuous data collection.
-    
+- **Cron Job:** A managed scheduler that pings the Orchestrator at your defined interval (e.g., every 5 minutes) to ensure continuous data collection.
 
 ### 5. Secret Manager
 
--   **API Credentials:** Secure storage for your `JumpCloud API Key` and `Organization ID`, ensuring no sensitive credentials are hardcoded in the functions or environment variables.
-    
+- **API Credentials:** Secure storage for your `JumpCloud API Key` and `Organization ID`, ensuring no sensitive credentials are hardcoded in the functions or environment variables.
 
 ## Key Features
 
--   **Auto-Scaling:** If JumpCloud has 100,000 events in a 5-minute window, the Orchestrator will automatically split that into multiple Pub/Sub messages, allowing multiple Worker instances to process the data simultaneously.
-    
--   **BigQuery Ready:** When using the `NDJson` format, the application automatically sanitizes JSON keys (replacing spaces/hyphens with underscores) to ensure the files can be ingested into BigQuery without schema errors.
-    
--   **Manual Recovery:** The "Force Run" logic allows you to trigger a large historical backfill (up to 90 days) simply by clicking "Force Run" in the Cloud Scheduler console.
+- **Auto-Scaling:** If JumpCloud has 100,000 events in a 5-minute window, the Orchestrator will automatically split that into multiple Pub/Sub messages, allowing multiple Worker instances to process the data simultaneously.
+- **BigQuery Ready:** When using the `NDJson` format, the application automatically sanitizes JSON keys (replacing spaces/hyphens with underscores) to ensure the files can be ingested into BigQuery without schema errors.
+- **Manual Recovery:** The "Force Run" logic allows you to trigger a large historical backfill (up to 90 days) simply by clicking "Force Run" in the Cloud Scheduler console.
 
 # Pre-requisites
 
 - [Your JumpCloud API key](https://docs.jumpcloud.com/2.0/authentication-and-authorization/authentication-and-authorization-overview)
 - Google Cloud Admin/Owner account with these roles:
-  - ```roles/serviceusage.serviceUsageAdmin```
-  - ```roles/cloudbuild.builds.editor```
-  - ```roles/resourcemanager.projects.setIamPolicy```
+  - `roles/serviceusage.serviceUsageAdmin`
+  - `roles/cloudbuild.builds.editor`
+  - `roles/resourcemanager.projects.setIamPolicy`
 - [GCLOUD CLI installed](https://cloud.google.com/sdk/docs/install)
-  - After installing the CLI, run ```gcloud auth login``` and login with your Admin/Owner account
+  - After installing the CLI, run `gcloud auth login` and login with your Admin/Owner account
 - On your CLI, run these commands to enable the [services](https://cloud.google.com/apis?hl=en) needed to build the app:
 
 ```bash
@@ -98,14 +88,16 @@ gcloud services enable pubsub.googleapis.com
 ```
 
 - Your GCP Project ID and Number. You can automatically fetch and set these as variables in your CLI so you won't need to manually insert them in the commands below. Run this block in your terminal:
+
 ```bash
 PROJECTID=$(gcloud config get-value project)
 PROJECTNUM=$(gcloud projects describe $PROJECTID --format="value(projectNumber)")
 echo "Project ID set to: $PROJECTID"
 echo "Project Number set to: $PROJECTNUM"
 ```
-- You must assign the Cloud Build Service account ```ProjectNumber@cloudbuild.gserviceaccount.com``` [roles](https://console.cloud.google.com/cloud-build/settings/). This account serves as an identity with specific roles to build the necessary services. [Cloud Build Service Account](https://cloud.google.com/build/docs/cloud-build-service-account)
-  
+
+- You must assign the Cloud Build Service account `ProjectNumber@cloudbuild.gserviceaccount.com` [roles](https://console.cloud.google.com/cloud-build/settings/). This account serves as an identity with specific roles to build the necessary services. [Cloud Build Service Account](https://cloud.google.com/build/docs/cloud-build-service-account)
+
 ```bash
 gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM@cloudbuild.gserviceaccount.com --role=roles/iam.serviceAccountUser
 gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM@cloudbuild.gserviceaccount.com --role=roles/secretmanager.admin
@@ -120,15 +112,13 @@ gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJE
 gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM@cloudbuild.gserviceaccount.com --role=roles/resourcemanager.projectIamAdmin
 ```
 
-
 - You must assign roles to the compute developer service account to access the secrets manager
 
 ```bash
 gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role roles/secretmanager.secretAccessor
 ```
 
-
-- You must also assign roles to the App Engine service account ```*@appspot.gserviceaccount.com```. This account serves as identity when accessing Cloud Storage and Secret Manager. [Function Identity](https://cloud.google.com/functions/docs/securing/function-identity#:~:text=Every%20function%20is%20associated%20with,as%20its%20runtime%20service%20account.)
+- You must also assign roles to the App Engine service account `*@appspot.gserviceaccount.com`. This account serves as identity when accessing Cloud Storage and Secret Manager. [Function Identity](https://cloud.google.com/functions/docs/securing/function-identity#:~:text=Every%20function%20is%20associated%20with,as%20its%20runtime%20service%20account.)
 
 ```bash
 gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTID@appspot.gserviceaccount.com --role roles/secretmanager.secretAccessor
@@ -136,7 +126,7 @@ gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJE
 gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTID@appspot.gserviceaccount.com --role roles/run.admin
 gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTID@appspot.gserviceaccount.com --role roles/cloudfunctions.admin
 ```
-  
+
 # Create Directory to Store Directory Insights Files
 
 Create a directory to store your Serverless Application and any dependencies required. In the root of that directory add [Directory Insights Files](https://github.com/TheJumpCloud/JumpCloud-Serverless/blob/master/GCP/DirectoryInsights/).
@@ -155,25 +145,27 @@ Using the GCLOUD CLI, you can [Cloud Build Deploy](https://cloud.google.com/sdk/
 
 _Note: `gcloud builds submit` default config is "cloudbuild.yaml" which is why we do not need to specify `--config=config.yaml` tag_
 _Note: `.gcloudignore` file excludes unwanted files/folders from getting push in the deploy process_
-_Note: After a succesfull build, validate that each services are running properly. You can do this by doing a FORCE RUN on the schedule we created, this will trigger the function to run the DI app script and saved the log files to Cloud Scheduler:_
+_Note: After a successful build, validate that each services are running properly. You can do this by doing a FORCE RUN on the schedule we created, this will trigger the function to run the DI app script and saved the log files to Cloud Scheduler:_
 ![alt text](image-1.png)
 ![alt text](image.png)
 ![alt text](image-3.png)
-
 
 Using the GCLOUD CLI, you can [Cloud Build Deploy](https://cloud.google.com/sdk/gcloud/reference/builds/submit) directly from the project directory
 
 # Pipeline Architecture & Error Handling (DLQ)
 
 ## Dead Letter Queue (DLQ)
+
 If the JumpCloud API is temporarily down, times out, or a job fails for any reason, the Worker will automatically retry the job up to 5 times using exponential backoff. If it fails on the 5th attempt, the data is not lost. Instead, the job payload is safely moved to a Dead Letter Queue (DLQ) topic (jc-di-jobs-dlq).
 
 ## Redriving Failed Messages
+
 Once you have resolved the underlying issue (e.g., an API outage is over), you can easily push the failed messages from the DLQ back into the main pipeline to be processed again. This is called a "Redrive".
 
 The deployment automatically creates a Redrive Cloud Function for you. You can trigger it in two ways:
 
 ### Option 1: Using the Google Cloud Console
+
 1. Navigate to Cloud Run (or Cloud Functions) in the GCP Console.
 
 2. Click on your deployed redrive service (e.g., jc-di-redrive).
@@ -185,16 +177,18 @@ The deployment automatically creates a Redrive Cloud Function for you. You can t
 The output will tell you exactly how many messages were successfully moved back to the main queue.
 
 ### Option 2: Using the gcloud CLI
+
 Run the following command in your terminal:
 
 ```bash
 gcloud functions call jc-di-redrive --region=us-central1
 ```
-_Note: Replace jc-di-redrive and us-central1 in the command above if you modified your cloudbuild.yaml substitutions.
+
+\_Note: Replace jc-di-redrive and us-central1 in the command above if you modified your cloudbuild.yaml substitutions.
 
 # Remove Cloud Build Roles
 
-_Note: After a successful build, it is good practice to cleanup the roles we provided to the Cloud Build service account as it is not needed to be used anymore. On your CLI, run the commands below:
+\_Note: After a successful build, it is good practice to cleanup the roles we provided to the Cloud Build service account as it is not needed to be used anymore. On your CLI, run the commands below:
 
 ```bash
 #Cloud Functions Developer
