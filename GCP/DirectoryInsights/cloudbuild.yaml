@@ -3,57 +3,44 @@ substitutions:
   _JC_ORG_ID: "CHANGEVALUE"
   _JC_SERVICE: "CHANGEVALUE"   # Can accept multiple values' for example:  _JC_SERVICE: directory,systems or gather logs from all services with the _JC_SERVICE: all. Available services: 
   ### all, access_management, alerts, asset_management, directory, ldap, mdm, notifications, object_storage, password_manager, radius, reports, saas_app_management, software, sso, systems, workflows. ###
-
-  _JSON_FORMAT: "MultiLine"   # MutiLine, SingleLine, NDJson
-  _GCP_PROJECT_ID_NAME: "YOURPROJECTID" 
-  _STORAGE_CLASS: "standard" 
+  _SCHEDULE_CRON_TIME: "CHANGEVALUE"  # Ref: https://crontab.guru/
+  _GCP_PROJECT_ID_NAME: "CHANGEVALUE" 
   _BUCKET_NAME: "CHANGEVALUE"
+  _JSON_FORMAT: "MultiLine"   # MutiLine, SingleLine, NDJson
+  _STORAGE_CLASS: "standard" 
   _ORCHESTRATOR_FUNCTION_NAME: "jc-di-orchestrator" 
   _WORKER_FUNCTION_NAME: "jc-di-worker"
   _REDRIVE_FUNCTION_NAME: "jc-di-redrive" 
   _PUBSUB_TOPIC: "jc-di-jobs"
   _PUBSUB_DLQ_TOPIC: "jc-di-jobs-dlq" 
   _SCHEDULE_NAME: "jc-di-schedule" 
-  _SCHEDULE_CRON_TIME: "CHANGEVALUE"  # Ref: https://crontab.guru/
-  _REGION_LOCATION: "us-central1" # https://cloud.google.com/about/locations
+  _REGION_LOCATION: "us-central1" 
   _SECRET_JC_API_KEY_NAME: "jc-api-key" 
   _SECRET_JC_ORG_ID_NAME: "jc-org-id"
+  _FORCE_RUN_DAYS: "30" # Change this when doing a force run test using the scheduler
+  _MAX_EVENTS_PER_WORKER: "25000"
+  _WORKER_MEMORY: "512MB"
 
 steps:
-  # Step 1: Validate _JSON_FORMAT constraint
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: bash
     args:
       - -c
       - |
         if [[ "$_JSON_FORMAT" != "MultiLine" && "$_JSON_FORMAT" != "SingleLine" && "$_JSON_FORMAT" != "NDJson" ]]; then
-          echo "FATAL ERROR: _JSON_FORMAT must be exactly 'MultiLine', 'SingleLine', or 'NDJson'."
-          echo "You provided: '$_JSON_FORMAT'"
           exit 1
         fi
-        echo "Validation passed. JSON format is set to: $_JSON_FORMAT"
 
-  # Step 2: Check and enable required Google Cloud services
+# Storage bucket creation
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: bash
     args:
       - -c
       - |
-        gcloud services enable cloudbuild.googleapis.com cloudfunctions.googleapis.com \
-        cloudscheduler.googleapis.com storage-component.googleapis.com \
-        secretmanager.googleapis.com cloudresourcemanager.googleapis.com pubsub.googleapis.com
+        gsutil ls -p $_GCP_PROJECT_ID_NAME gs://$_BUCKET_NAME >/dev/null 2>&1 || \
+        gsutil mb -p $_GCP_PROJECT_ID_NAME -c $_STORAGE_CLASS -l $_REGION_LOCATION gs://$_BUCKET_NAME
 
-  # Step 3: Storage bucket creation
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: bash
-    args:
-      - -c
-      - |
-        if ! gsutil ls -p $_GCP_PROJECT_ID_NAME gs://$_BUCKET_NAME >/dev/null 2>&1; then
-          gsutil mb -p $_GCP_PROJECT_ID_NAME -c $_STORAGE_CLASS -l $_REGION_LOCATION gs://$_BUCKET_NAME
-        fi
-
-  # Step 4: Create Secrets in Secret Manager
+  # Create Secrets
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: bash
     args:
@@ -62,7 +49,7 @@ steps:
         echo -n "$_JC_API_KEY" | gcloud secrets create $_SECRET_JC_API_KEY_NAME --data-file=- || true
         echo -n "$_JC_ORG_ID" | gcloud secrets create $_SECRET_JC_ORG_ID_NAME --data-file=- || true
 
-  # Step 5: Create Pub/Sub Topics (Main queue and DLQ)
+  # Create Pub/Sub Topics (Main queue and DLQ)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: bash
     args:
@@ -74,7 +61,7 @@ steps:
         # Create Dead Letter Topic
         gcloud pubsub topics describe $_PUBSUB_DLQ_TOPIC || gcloud pubsub topics create $_PUBSUB_DLQ_TOPIC
 
-  # Step 6: Deploy the Orchestrator Cloud Function (HTTP Triggered)
+  # Deploy the Orchestrator Cloud Function (HTTP Triggered)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     args:
     - gcloud
@@ -84,13 +71,13 @@ steps:
     - --region=$_REGION_LOCATION
     - --source=.
     - --runtime=python312
-    - --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,jc_api_key_secret=$_SECRET_JC_API_KEY_NAME,jc_org_id=$_SECRET_JC_ORG_ID_NAME,cron_schedule=$_SCHEDULE_CRON_TIME,service=$_JC_SERVICE,pubsub_topic=$_PUBSUB_TOPIC
+    - --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,jc_api_key_secret=$_SECRET_JC_API_KEY_NAME,jc_org_id=$_SECRET_JC_ORG_ID_NAME,cron_schedule=$_SCHEDULE_CRON_TIME,service=$_JC_SERVICE,pubsub_topic=$_PUBSUB_TOPIC,force_run_days=$_FORCE_RUN_DAYS,max_events_per_worker=$_MAX_EVENTS_PER_WORKER
     - --entry-point=jc_orchestrator
     - --trigger-http
     - --no-allow-unauthenticated
     - --run-service-account=$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com
 
-  # Step 7: Deploy the Worker Cloud Function & Configure DLQ
+  # Deploy the Worker Cloud Function & Configure DLQ
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: bash
     args:
@@ -103,6 +90,7 @@ steps:
           --runtime=python312 \
           --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,jc_api_key_secret=$_SECRET_JC_API_KEY_NAME,jc_org_id=$_SECRET_JC_ORG_ID_NAME,bucket_name=$_BUCKET_NAME,json_format=$_JSON_FORMAT \
           --entry-point=jc_worker \
+          --memory=$_WORKER_MEMORY \
           --trigger-topic=$_PUBSUB_TOPIC \
           --retry \
           --no-allow-unauthenticated \
@@ -133,7 +121,7 @@ steps:
         # 5. Create a Pull Subscription on the DLQ itself so messages aren't lost
         gcloud pubsub subscriptions describe $_PUBSUB_DLQ_TOPIC-sub || gcloud pubsub subscriptions create $_PUBSUB_DLQ_TOPIC-sub --topic=$_PUBSUB_DLQ_TOPIC
 
-  # Step 8: Deploy the Redrive Cloud Function
+  # Deploy the Redrive Cloud Function
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: bash
     args:
@@ -160,7 +148,7 @@ steps:
           --member="serviceAccount:$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com" \
           --role="roles/pubsub.publisher"
 
-  # Step 9: Create a Cloud Scheduler job targeting the Orchestrator
+  # Create a Cloud Scheduler job targeting the Orchestrator
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: bash
     args:
@@ -170,3 +158,12 @@ steps:
         functionsURL=$$(gcloud functions describe $_ORCHESTRATOR_FUNCTION_NAME --region=$_REGION_LOCATION --format=json)
         url=$$(echo "$$functionsURL" | jq -r '.url')
         gcloud scheduler jobs create http $_SCHEDULE_NAME --location=$_REGION_LOCATION --schedule="$_SCHEDULE_CRON_TIME" --uri="$$url" --http-method=GET --oidc-service-account-email="$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com" || echo "Scheduler job may already exist."
+  # Create Scheduler Job
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        apt-get update && apt-get install -y jq
+        url=$$(gcloud functions describe $_ORCHESTRATOR_FUNCTION_NAME --region=$_REGION_LOCATION --format="value(httpsTrigger.url)")
+        gcloud scheduler jobs create http $_SCHEDULE_NAME --location=$_REGION_LOCATION --schedule="$_SCHEDULE_CRON_TIME" --uri="$$url" --http-method=GET --oidc-service-account-email="$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com" || echo "Exists."

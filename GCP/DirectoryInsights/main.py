@@ -65,7 +65,7 @@ def get_cron_time(cron_expression, time_tolerance):
         
         # GCP "Force Run" Detection
         if (now - current_cron_time).total_seconds() > 60: 
-            # Grab the requested lookback window from the environment (defaults to 30 days). This functionality is used for testing. Change the number value on how many event days you'd like to pull (max 90 days) 
+            # Grab the requested lookback window from the environment (defaults to 30 days). This functionality is used for testing. Change the force_run_days value on the orchestrator function env variables (max 90 days) 
             force_days = int(os.environ.get('force_run_days', 30))
             
             print(f"Manual Force Run detected! Adjusting search window to exactly {force_days} days from right now.")
@@ -133,7 +133,11 @@ def jc_orchestrator(request):
     if jc_org_id != '':                 
         headers['x-org-id'] = jc_org_id
 
-    MAX_EVENTS_PER_WORKER = 25000
+    # Grab the max events from the environment, defaulting to 25000 if not set
+    MAX_EVENTS_PER_WORKER = int(os.environ.get('max_events_per_worker', 25000)) 
+
+    # Create a list to track all of our Pub/Sub publish operations
+    publish_futures = []
 
     for service in service_list:
         if service not in available_services:
@@ -173,13 +177,26 @@ def jc_orchestrator(request):
                 'start_time': slice_start.isoformat("T").replace("+00:00", "Z"),
                 'end_time': slice_end.isoformat("T").replace("+00:00", "Z")
             }
-            # Publish to Pub/Sub
-            publisher.publish(topic_path, json.dumps(message_body).encode("utf-8"))
+            
+            # Publish to Pub/Sub and capture the Future object it returns
+            future = publisher.publish(topic_path, json.dumps(message_body).encode("utf-8"))
+            publish_futures.append(future)
+            
             print(f"Queued job into Pub/Sub: {service} | {message_body['start_time']} to {message_body['end_time']}")
 
-    print("--- ORCHESTRATOR COMPLETE ---")
-    return "Orchestration complete", 200 # Should return 200 everytime even when we can't communicate to the JC API. It should always return event times to be pushed to the worker
+    # Wait for all messages to be successfully published before exiting the function
+    if publish_futures:
+        print(f"Waiting for {len(publish_futures)} Pub/Sub messages to finish sending...")
+        for future in publish_futures:
+            try:
+                # Calling .result() forces the code to pause until this specific message is confirmed delivered
+                future.result() 
+            except Exception as e:
+                print(f"Failed to publish message to Pub/Sub: {e}")
+                raise Exception(f"Pub/Sub publish failed: {e}")
 
+    print("--- ORCHESTRATOR COMPLETE ---")
+    return "Orchestration complete", 200
 # ==============================================================================
 # WORKER FUNCTION (Triggered by Pub/Sub)
 # ==============================================================================
@@ -208,12 +225,6 @@ def jc_worker(event, context):
     pubsub_message = base64.b64decode(event['data']).decode('utf-8')
     payload = json.loads(pubsub_message)
     print(f"Received Job Payload: {payload}")
-    
-    service = payload['service']
-    start_date = payload['start_time']
-    end_date = payload['end_time']
-    
-    url = "https://api.jumpcloud.com/insights/directory/v1/events"
     
     service = payload['service']
     start_date = payload['start_time']
