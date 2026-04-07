@@ -7,9 +7,9 @@ substitutions:
   _RESOURCE_PREFIX: "jc-di"
   _SCHEDULE_CRON_TIME: "CHANGEVALUE" # Ref: https://crontab.guru/
   _GCP_PROJECT_ID_NAME: "CHANGEVALUE"
-  _JSON_FORMAT: "MultiLine" # MutiLine, SingleLine, NDJson
-  _STORAGE_CLASS: "standard"
-  _REGION_LOCATION: "us-central1"
+  _JSON_FORMAT: "CHANGEVALUE" # MutiLine, SingleLine, NDJson
+  _STORAGE_CLASS: "CHANGEVALUE" # Cloud Storage Class: standard, nearline, coldline, archive
+  _REGION_LOCATION: "CHANGEVALUE" # https://cloud.google.com/compute/docs/regions-zones
   _FORCE_RUN_DAYS: "30" # Change this when doing a force run test using the scheduler
   _MAX_EVENTS_PER_WORKER: "25000"
   _WORKER_MEMORY: "512MB"
