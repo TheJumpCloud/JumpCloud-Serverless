@@ -1,28 +1,21 @@
 substitutions:
   _JC_API_KEY: "CHANGEVALUE"
   _JC_ORG_ID: "CHANGEVALUE"
-  _JC_SERVICE: "CHANGEVALUE"   # Can accept multiple values' for example:  _JC_SERVICE: directory,systems or gather logs from all services with the _JC_SERVICE: all. Available services: 
+  _JC_SERVICE: "CHANGEVALUE" # Can accept multiple values' for example:  _JC_SERVICE: directory,systems or gather logs from all services with the _JC_SERVICE: all. Available services:
   ### all, access_management, alerts, asset_management, directory, ldap, mdm, notifications, object_storage, password_manager, radius, reports, saas_app_management, software, sso, systems, workflows. ###
-  _SCHEDULE_CRON_TIME: "CHANGEVALUE"  # Ref: https://crontab.guru/
-  _GCP_PROJECT_ID_NAME: "CHANGEVALUE" 
-  _BUCKET_NAME: "CHANGEVALUE"
-  _JSON_FORMAT: "MultiLine"   # MutiLine, SingleLine, NDJson
-  _STORAGE_CLASS: "standard" 
-  _ORCHESTRATOR_FUNCTION_NAME: "jc-di-orchestrator" 
-  _WORKER_FUNCTION_NAME: "jc-di-worker"
-  _REDRIVE_FUNCTION_NAME: "jc-di-redrive" 
-  _PUBSUB_TOPIC: "jc-di-jobs"
-  _PUBSUB_DLQ_TOPIC: "jc-di-jobs-dlq" 
-  _SCHEDULE_NAME: "jc-di-schedule" 
-  _REGION_LOCATION: "us-central1" 
-  _SECRET_JC_API_KEY_NAME: "jc-api-key" 
-  _SECRET_JC_ORG_ID_NAME: "jc-org-id"
+  # Prefix for GCS bucket, secrets, functions, Pub/Sub, and scheduler.
+  _RESOURCE_PREFIX: "jc-di"
+  _SCHEDULE_CRON_TIME: "CHANGEVALUE" # Ref: https://crontab.guru/
+  _GCP_PROJECT_ID_NAME: "CHANGEVALUE"
+  _JSON_FORMAT: "MultiLine" # MutiLine, SingleLine, NDJson
+  _STORAGE_CLASS: "standard"
+  _REGION_LOCATION: "us-central1"
   _FORCE_RUN_DAYS: "30" # Change this when doing a force run test using the scheduler
   _MAX_EVENTS_PER_WORKER: "25000"
   _WORKER_MEMORY: "512MB"
 
 steps:
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     entrypoint: bash
     args:
       - -c
@@ -31,80 +24,80 @@ steps:
           exit 1
         fi
 
-# Storage bucket creation
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  # Storage bucket creation
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     entrypoint: bash
     args:
       - -c
       - |
-        gsutil ls -p $_GCP_PROJECT_ID_NAME gs://$_BUCKET_NAME >/dev/null 2>&1 || \
-        gsutil mb -p $_GCP_PROJECT_ID_NAME -c $_STORAGE_CLASS -l $_REGION_LOCATION gs://$_BUCKET_NAME
+        gsutil ls -p $_GCP_PROJECT_ID_NAME gs://${_RESOURCE_PREFIX}-di-bucket >/dev/null 2>&1 || \
+        gsutil mb -p $_GCP_PROJECT_ID_NAME -c $_STORAGE_CLASS -l $_REGION_LOCATION gs://${_RESOURCE_PREFIX}-di-bucket
 
   # Create Secrets
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     entrypoint: bash
     args:
       - -c
       - |
-        echo -n "$_JC_API_KEY" | gcloud secrets create $_SECRET_JC_API_KEY_NAME --data-file=- || true
-        echo -n "$_JC_ORG_ID" | gcloud secrets create $_SECRET_JC_ORG_ID_NAME --data-file=- || true
+        echo -n "$_JC_API_KEY" | gcloud secrets create ${_RESOURCE_PREFIX}-api-key --data-file=- || true
+        echo -n "$_JC_ORG_ID" | gcloud secrets create ${_RESOURCE_PREFIX}-org-id --data-file=- || true
 
   # Create Pub/Sub Topics (Main queue and DLQ)
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     entrypoint: bash
     args:
       - -c
       - |
         # Create Main Topic
-        gcloud pubsub topics describe $_PUBSUB_TOPIC || gcloud pubsub topics create $_PUBSUB_TOPIC
-        
+        gcloud pubsub topics describe ${_RESOURCE_PREFIX}-jobs || gcloud pubsub topics create ${_RESOURCE_PREFIX}-jobs
+
         # Create Dead Letter Topic
-        gcloud pubsub topics describe $_PUBSUB_DLQ_TOPIC || gcloud pubsub topics create $_PUBSUB_DLQ_TOPIC
+        gcloud pubsub topics describe ${_RESOURCE_PREFIX}-jobs-dlq || gcloud pubsub topics create ${_RESOURCE_PREFIX}-jobs-dlq
 
   # Deploy the Orchestrator Cloud Function (HTTP Triggered)
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     args:
-    - gcloud
-    - functions
-    - deploy
-    - $_ORCHESTRATOR_FUNCTION_NAME
-    - --region=$_REGION_LOCATION
-    - --source=.
-    - --runtime=python312
-    - --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,jc_api_key_secret=$_SECRET_JC_API_KEY_NAME,jc_org_id=$_SECRET_JC_ORG_ID_NAME,cron_schedule=$_SCHEDULE_CRON_TIME,service=$_JC_SERVICE,pubsub_topic=$_PUBSUB_TOPIC,force_run_days=$_FORCE_RUN_DAYS,max_events_per_worker=$_MAX_EVENTS_PER_WORKER
-    - --entry-point=jc_orchestrator
-    - --trigger-http
-    - --no-allow-unauthenticated
-    - --run-service-account=$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com
+      - gcloud
+      - functions
+      - deploy
+      - ${_RESOURCE_PREFIX}-orchestrator
+      - --region=$_REGION_LOCATION
+      - --source=.
+      - --runtime=python312
+      - --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,jc_api_key_secret=${_RESOURCE_PREFIX}-api-key,jc_org_id=${_RESOURCE_PREFIX}-org-id,cron_schedule=$_SCHEDULE_CRON_TIME,service=$_JC_SERVICE,pubsub_topic=${_RESOURCE_PREFIX}-jobs,force_run_days=$_FORCE_RUN_DAYS,max_events_per_worker=$_MAX_EVENTS_PER_WORKER
+      - --entry-point=jc_orchestrator
+      - --trigger-http
+      - --no-allow-unauthenticated
+      - --run-service-account=$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com
 
   # Deploy the Worker Cloud Function & Configure DLQ
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     entrypoint: bash
     args:
       - -c
       - |
         # 1. Deploy the function
-        gcloud functions deploy $_WORKER_FUNCTION_NAME \
+        gcloud functions deploy ${_RESOURCE_PREFIX}-worker \
           --region=$_REGION_LOCATION \
           --source=. \
           --runtime=python312 \
-          --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,jc_api_key_secret=$_SECRET_JC_API_KEY_NAME,jc_org_id=$_SECRET_JC_ORG_ID_NAME,bucket_name=$_BUCKET_NAME,json_format=$_JSON_FORMAT \
+          --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,jc_api_key_secret=${_RESOURCE_PREFIX}-api-key,jc_org_id=${_RESOURCE_PREFIX}-org-id,bucket_name=${_RESOURCE_PREFIX}-di-bucket,json_format=$_JSON_FORMAT \
           --entry-point=jc_worker \
           --memory=$_WORKER_MEMORY \
-          --trigger-topic=$_PUBSUB_TOPIC \
+          --trigger-topic=${_RESOURCE_PREFIX}-jobs \
           --retry \
           --no-allow-unauthenticated \
           --run-service-account=$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com
 
         # 2. Get the auto-generated Pub/Sub Subscription
-        SUBSCRIPTION_PATH=$$(gcloud pubsub topics list-subscriptions $_PUBSUB_TOPIC | grep "projects/" | head -n 1)
+        SUBSCRIPTION_PATH=$$(gcloud pubsub topics list-subscriptions ${_RESOURCE_PREFIX}-jobs | grep "projects/" | head -n 1)
 
         # 3. Grant Pub/Sub Service Agent IAM permissions (Mandatory for DLQ)
         PROJECT_NUMBER=$$(gcloud projects describe $_GCP_PROJECT_ID_NAME --format="value(projectNumber)")
         PUBSUB_SERVICE_ACCOUNT="service-$$PROJECT_NUMBER@gcp-sa-pubsub.iam.gserviceaccount.com"
 
         # Permission to publish to the DLQ topic
-        gcloud pubsub topics add-iam-policy-binding $_PUBSUB_DLQ_TOPIC \
+        gcloud pubsub topics add-iam-policy-binding ${_RESOURCE_PREFIX}-jobs-dlq \
           --member="serviceAccount:$$PUBSUB_SERVICE_ACCOUNT" \
           --role="roles/pubsub.publisher"
 
@@ -115,46 +108,46 @@ steps:
 
         # 4. Attach the DLQ Redrive Policy
         gcloud pubsub subscriptions update $$SUBSCRIPTION_PATH \
-          --dead-letter-topic=$_PUBSUB_DLQ_TOPIC \
+          --dead-letter-topic=${_RESOURCE_PREFIX}-jobs-dlq \
           --max-delivery-attempts=5
           
         # 5. Create a Pull Subscription on the DLQ itself so messages aren't lost
-        gcloud pubsub subscriptions describe $_PUBSUB_DLQ_TOPIC-sub || gcloud pubsub subscriptions create $_PUBSUB_DLQ_TOPIC-sub --topic=$_PUBSUB_DLQ_TOPIC
+        gcloud pubsub subscriptions describe ${_RESOURCE_PREFIX}-jobs-dlq-sub || gcloud pubsub subscriptions create ${_RESOURCE_PREFIX}-jobs-dlq-sub --topic=${_RESOURCE_PREFIX}-jobs-dlq
 
   # Deploy the Redrive Cloud Function
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     entrypoint: bash
     args:
       - -c
       - |
         # 1. Deploy the HTTP Redrive function
-        gcloud functions deploy $_REDRIVE_FUNCTION_NAME \
+        gcloud functions deploy ${_RESOURCE_PREFIX}-redrive \
           --region=$_REGION_LOCATION \
           --source=. \
           --runtime=python312 \
-          --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,dlq_sub_id=$_PUBSUB_DLQ_TOPIC-sub,main_topic_id=$_PUBSUB_TOPIC \
+          --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,dlq_sub_id=${_RESOURCE_PREFIX}-jobs-dlq-sub,main_topic_id=${_RESOURCE_PREFIX}-jobs \
           --entry-point=redrive_dlq \
           --trigger-http \
           --no-allow-unauthenticated \
           --run-service-account=$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com
 
         # 2. Grant the service account permission to PULL from the DLQ subscription
-        gcloud pubsub subscriptions add-iam-policy-binding $_PUBSUB_DLQ_TOPIC-sub \
+        gcloud pubsub subscriptions add-iam-policy-binding ${_RESOURCE_PREFIX}-jobs-dlq-sub \
           --member="serviceAccount:$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com" \
           --role="roles/pubsub.subscriber"
 
         # 3. Grant the service account permission to PUBLISH to the main topic
-        gcloud pubsub topics add-iam-policy-binding $_PUBSUB_TOPIC \
+        gcloud pubsub topics add-iam-policy-binding ${_RESOURCE_PREFIX}-jobs \
           --member="serviceAccount:$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com" \
           --role="roles/pubsub.publisher"
 
   # Create a Cloud Scheduler job targeting the Orchestrator
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     entrypoint: bash
     args:
       - -c
       - |
         apt-get update && apt-get install -y jq
-        functionsURL=$$(gcloud functions describe $_ORCHESTRATOR_FUNCTION_NAME --region=$_REGION_LOCATION --format=json)
+        functionsURL=$$(gcloud functions describe ${_RESOURCE_PREFIX}-orchestrator --region=$_REGION_LOCATION --format=json)
         url=$$(echo "$$functionsURL" | jq -r '.url')
-        gcloud scheduler jobs create http $_SCHEDULE_NAME --location=$_REGION_LOCATION --schedule="$_SCHEDULE_CRON_TIME" --uri="$$url" --http-method=GET --oidc-service-account-email="$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com" || echo "Scheduler job may already exist."
+        gcloud scheduler jobs create http ${_RESOURCE_PREFIX}-schedule --location=$_REGION_LOCATION --schedule="$_SCHEDULE_CRON_TIME" --uri="$$url" --http-method=GET --oidc-service-account-email="$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com" || echo "Scheduler job may already exist."
