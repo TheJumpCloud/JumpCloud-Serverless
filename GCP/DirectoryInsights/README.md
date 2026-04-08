@@ -20,11 +20,14 @@ _Note: This document assumes the use of Python 3.12 on GCP Cloud Functions_
 - [Create Directory to Store Directory Insights Files](#create-directory-to-store-directory-insights-files)
 - [Edit CloudBuild.yaml](#edit-cloudbuildyaml)
 - [Deploying the Application](#deploying-the-application)
+- [Manual Testing \& Historical Backfill](#manual-testing--historical-backfill)
+    - [Option 1: Using the Google Cloud Console](#option-1-using-the-google-cloud-console)
+    - [Option 2: Using the gcloud CLI](#option-2-using-the-gcloud-cli)
 - [Pipeline Architecture \& Error Handling (DLQ)](#pipeline-architecture--error-handling-dlq)
   - [Dead Letter Queue (DLQ)](#dead-letter-queue-dlq)
   - [Redriving Failed Messages](#redriving-failed-messages)
-    - [Option 1: Using the Google Cloud Console](#option-1-using-the-google-cloud-console)
-    - [Option 2: Using the gcloud CLI](#option-2-using-the-gcloud-cli)
+    - [Option 1: Using the Google Cloud Console](#option-1-using-the-google-cloud-console-1)
+    - [Option 2: Using the gcloud CLI](#option-2-using-the-gcloud-cli-1)
 - [Remove Cloud Build Roles](#remove-cloud-build-roles)
 
 # What This Application Builds
@@ -151,6 +154,50 @@ _Note: After a successful build, validate that each services are running properl
 ![alt text](image-3.png)
 
 Using the GCLOUD CLI, you can [Cloud Build Deploy](https://cloud.google.com/sdk/gcloud/reference/builds/submit) directly from the project directory
+
+
+# Manual Testing & Historical Backfill
+
+**⚠️ WARNING regarding Data Duplication:** Running a manual historical backfill for dates that have already been processed by the Cloud Scheduler (or running the same backfill multiple times) **will result in duplicate event records** in your Cloud Storage bucket. This application extracts raw data and does not inherently deduplicate existing storage files. If you need to backfill, ensure you are pulling a time window that hasn't been collected yet, or plan to deduplicate the data downstream (e.g., using `SELECT DISTINCT` queries in BigQuery).
+
+Instead of waiting for the Cloud Scheduler to fire, you can manually force the Orchestrator to perform a historical backfill (e.g., pulling the last 90 days of data). You can dynamically specify how many days back to look and which services to query using a simple JSON payload.
+
+### Option 1: Using the Google Cloud Console
+
+1.  Navigate to **Cloud Run** (or Cloud Functions) in the GCP Console.
+    
+2.  Click on your deployed Orchestrator function (e.g., `jc-di-orchestrator`).
+    
+3.  Click the **TESTING** tab near the top.
+    
+4.  In the **Triggering event** JSON box, paste the following payload:
+    
+    JSON
+    
+    ```
+    {
+      "event_days": 90,
+      "service": "all"
+    }
+    
+    ```
+    
+5.  Click **TEST THE FUNCTION**.
+    
+
+### Option 2: Using the gcloud CLI
+
+You can trigger the exact same payload directly from your terminal. The `gcloud` CLI automatically handles your authentication tokens:
+
+Bash
+
+```
+gcloud functions call jc-di-orchestrator --region=us-central1 --data='{"event_days": 90, "service": "all"}'
+
+```
+
+\_Note: You can change the `service` to specific endpoints like `"directory"` or `"systems"` for targeted testing._
+
 
 # Pipeline Architecture & Error Handling (DLQ)
 
