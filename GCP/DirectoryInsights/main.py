@@ -74,6 +74,56 @@ def chunk_time_range(start_time, end_time, chunks):
     delta = (end_time - start_time) / chunks
     return [(start_time + delta * i, start_time + delta * (i + 1)) for i in range(chunks)]
 
+def parse_utc_datetime(value):
+    """
+    Parse start_time / end_time from HTTP JSON.
+
+    Dynamic (evaluated at request time, UTC):
+      - "now" — current instant
+      - "now-30" or "now-30d" — 30 days before now (suffix: d=days, h=hours, m=minutes, s=seconds; bare number = days)
+
+    Fixed: ISO-8601, or YYYY-MM-DD:HH:MM:SS (colon between date and time). Naive values are UTC.
+    """
+    if value is None:
+        raise ValueError("Timestamp is missing")
+    s_raw = str(value).strip()
+    if not s_raw:
+        raise ValueError("Timestamp is empty")
+
+    s_key = s_raw.lower()
+    utc = datetime.timezone.utc
+    now = datetime.datetime.now(utc)
+
+    if s_key == "now":
+        return now
+
+    rel = re.match(r"^now-(\d+)([dhms])?$", s_key)
+    if rel:
+        n = int(rel.group(1))
+        unit = rel.group(2) or "d"
+        if unit == "d":
+            delta = datetime.timedelta(days=n)
+        elif unit == "h":
+            delta = datetime.timedelta(hours=n)
+        elif unit == "m":
+            delta = datetime.timedelta(minutes=n)
+        else:
+            delta = datetime.timedelta(seconds=n)
+        return now - delta
+
+    s = s_raw
+    # Allow 2026-03-31:00:00:00 — normalize third colon (date/time boundary) to 'T'
+    if len(s) > 10 and s[10] == ":":
+        s = s[:10] + "T" + s[11:]
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    dt = datetime.datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=utc)
+    else:
+        dt = dt.astimezone(utc)
+    return dt
+
 # ==============================================================================
 # ORCHESTRATOR FUNCTION (Triggered by HTTP via Cloud Scheduler)
 # ==============================================================================
@@ -91,13 +141,14 @@ def jc_orchestrator(request):
         print(f"Missing env var: {e}")
         return f"Missing env var: {e}", 500
 
-    # --- Check for manual test payload from GCP Console ---
+    # --- Optional JSON: explicit window (start_time + end_time) or service override ---
     request_json = request.get_json(silent=True) or {}
-    test_event_days = request_json.get('event_days')
-    test_service = request_json.get('service')
+    raw_start = request_json.get("start_time")
+    raw_end = request_json.get("end_time")
+    test_service = request_json.get("service")
 
     if test_service:
-        print(f"[TEST MODE] Overriding default service with: {test_service}")
+        print(f"[MANUAL] Overriding default service with: {test_service}")
         service_env = test_service
 
     print("Fetching API Key from Secret Manager...")
@@ -111,25 +162,33 @@ def jc_orchestrator(request):
             jc_org_id = fetched_id
             print(f"Org ID loaded")
 
-    # --- Determine Time Window (Test Payload vs Cron Schedule) ---
-    if test_event_days:
-        # Test Mode: Use the provided days back
-        print(f"[TEST MODE] 'event_days' payload detected. Calculating window for the past {test_event_days} days.")
+    # --- Time window: explicit [start_time, end_time] OR cron schedule ---
+    has_start = raw_start is not None and str(raw_start).strip() != ""
+    has_end = raw_end is not None and str(raw_end).strip() != ""
+
+    if has_start ^ has_end:
+        error_msg = "Provide both start_time and end_time for a manual window, or omit both for scheduled (cron) mode."
+        print(error_msg)
+        return error_msg, 400
+
+    if has_start and has_end:
         try:
-            days_back = int(test_event_days)
-            now = datetime.datetime.now(datetime.timezone.utc)
-            previous_time = now - datetime.timedelta(days=days_back)
-        except ValueError:
-            error_msg = "Invalid 'event_days' value. Must be a whole number (integer)."
+            window_start = parse_utc_datetime(raw_start)
+            window_end = parse_utc_datetime(raw_end)
+        except ValueError as e:
+            error_msg = f"Invalid start_time or end_time: {e}"
             print(error_msg)
             return error_msg, 400
-            
+        if window_start >= window_end:
+            error_msg = "start_time must be strictly before end_time."
+            print(error_msg)
+            return error_msg, 400
+        print(f"[MANUAL WINDOW] {window_start.isoformat()} to {window_end.isoformat()}")
     else:
-        # Production Mode: Normal Cron Run
         time_tolerance = 10
-        now, previous_time = get_cron_time(cron_schedule, time_tolerance)
-        
-    print(f"Search Window: {previous_time} to {now}")
+        window_end, window_start = get_cron_time(cron_schedule, time_tolerance)
+
+    print(f"Search Window: {window_start} to {window_end}")
     
     publisher = pubsub_v1.PublisherClient()
     topic_path = publisher.topic_path(project_id, topic_name)
@@ -160,8 +219,8 @@ def jc_orchestrator(request):
             print(f"Unknown service: {service}")
             continue
 
-        start_iso = previous_time.isoformat("T").replace("+00:00", "Z")
-        end_iso = now.isoformat("T").replace("+00:00", "Z")
+        start_iso = window_start.isoformat("T").replace("+00:00", "Z")
+        end_iso = window_end.isoformat("T").replace("+00:00", "Z")
         
         count_url = "https://api.jumpcloud.com/insights/directory/v1/events/count"
         
@@ -183,7 +242,7 @@ def jc_orchestrator(request):
             continue 
 
         num_chunks = max(1, math.ceil(total_events / MAX_EVENTS_PER_WORKER))
-        time_slices = chunk_time_range(previous_time, now, num_chunks)
+        time_slices = chunk_time_range(window_start, window_end, num_chunks)
         print(f"Splitting {service} into {num_chunks} chunk(s) for the workers.")
         
         for slice_start, slice_end in time_slices:
