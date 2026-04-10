@@ -1,9 +1,7 @@
 substitutions:
   # Authentication: APIKey (JumpCloud API key in the api-key secret) or ServiceToken (OAuth client credentials in the form clientID:clientSecret in the same secret).
   _JC_AUTH_TYPE: "ServiceToken"
-  _JC_API_KEY: "CHANGEVALUE"
-  _JC_ORG_ID: "CHANGEVALUE"
-  _JC_SERVICE: "CHANGEVALUE" # Can accept multiple values' for example:  _JC_SERVICE: directory,systems or gather logs from all services with the _JC_SERVICE: all. Available services:
+  _JC_MULTI_ORG: "false"
   ### all, access_management, alerts, asset_management, directory, ldap, mdm, notifications, object_storage, password_manager, radius, reports, saas_app_management, software, sso, systems, workflows. ###
   # Prefix for GCS bucket, secrets, functions, Pub/Sub, and scheduler.
   _RESOURCE_PREFIX: "jc-di"

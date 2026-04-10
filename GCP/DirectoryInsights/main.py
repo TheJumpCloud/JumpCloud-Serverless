@@ -123,6 +123,28 @@ def get_jc_request_headers(project_id, api_key_secret_name, jc_org_id, auth_type
     raise ValueError(f"Unknown jc_auth_type: {auth_type!r}; use APIKey or ServiceToken.")
 
 
+def parse_jc_multi_org_flag(value):
+    """True when env jc_multi_org enables comma-separated org list in the org secret."""
+    if value is None:
+        return False
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
+def build_org_id_list(org_secret_raw, multi_org):
+    """
+    Build the list of org IDs to process.
+
+    multi_org False: one org; empty secret yields [''] (optional x-org-id for API key).
+    multi_org True: split on comma; whitespace trimmed; empty list if no ids.
+    """
+    raw = (org_secret_raw or "").strip()
+    if multi_org:
+        return [p.strip() for p in raw.split(",") if p.strip()]
+    if raw:
+        return [raw]
+    return [""]
+
+
 def get_cron_time(cron_expression, time_tolerance):
     """Calculates the current and previous cron execution times."""
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -205,6 +227,7 @@ def jc_orchestrator(request):
         topic_name = os.environ['pubsub_topic']
         service_env = os.environ['service']
         jc_auth_type = os.environ.get("jc_auth_type", JC_AUTH_TYPE_API_KEY)
+        jc_multi_org = parse_jc_multi_org_flag(os.environ.get("jc_multi_org"))
         print("Environment variables loaded successfully.")
     except KeyError as e:
         print(f"Missing env var: {e}")
@@ -220,25 +243,21 @@ def jc_orchestrator(request):
         print(f"[MANUAL] Overriding default service with: {test_service}")
         service_env = test_service
 
-    jc_org_id = ""
+    org_secret_raw = ""
     if jc_org_id_secret_name:
-        print("Fetching Org ID from Secret Manager...")
-        fetched_id = get_secret(project_id, jc_org_id_secret_name).strip()
-        if fetched_id:
-            jc_org_id = fetched_id
-            print("Org ID loaded")
+        print("Fetching Org ID(s) from Secret Manager...")
+        org_secret_raw = get_secret(project_id, jc_org_id_secret_name).strip()
+        if org_secret_raw:
+            print("Org secret loaded")
 
-    print("Building JumpCloud request headers (credentials from Secret Manager)...")
-    try:
-        headers = get_jc_request_headers(
-            project_id, jc_api_key_secret_name, jc_org_id, jc_auth_type
+    org_ids = build_org_id_list(org_secret_raw, jc_multi_org)
+    if jc_multi_org and not org_ids:
+        error_msg = (
+            "jc_multi_org is true but no organization IDs were found in the org secret "
+            "(use a comma-separated list, e.g. orgId1,orgId2)."
         )
-    except ValueError as e:
-        print(str(e))
-        return str(e), 400
-    except requests.RequestException as e:
-        print(f"JumpCloud OAuth or network error: {e}")
-        return f"Authentication failed: {e}", 502
+        print(error_msg)
+        return error_msg, 400
 
     # --- Time window: explicit [start_time, end_time] OR cron schedule ---
     has_start = raw_start is not None and str(raw_start).strip() != ""
@@ -284,49 +303,67 @@ def jc_orchestrator(request):
     # Create a list to track all of our Pub/Sub publish operations
     publish_futures = []
 
-    for service in service_list:
-        if service not in available_services:
-            print(f"Unknown service: {service}")
-            continue
+    for org_id in org_ids:
+        org_label = org_id if org_id else "(no x-org-id)"
+        print(f"[ORCHESTRATOR] Organization context: {org_label}")
 
-        start_iso = window_start.isoformat("T").replace("+00:00", "Z")
-        end_iso = window_end.isoformat("T").replace("+00:00", "Z")
-        
-        count_url = "https://api.jumpcloud.com/insights/directory/v1/events/count"
-        
-        count_body = {'service': [service], 'start_time': start_iso, 'end_time': end_iso}
-        
-        print(f"[ORCHESTRATOR] Querying Count URL: {count_url} | Service: {service}")
-        print(f"[ORCHESTRATOR] Payload: {count_body}")
         try:
-            response = requests.post(count_url, json=count_body, headers=headers)
-            response.raise_for_status()
-            total_events = json.loads(response.text).get('count', 0)
-            print(f"Total events found for {service}: {total_events}")
-        except Exception as e:
-            print(f"Failed to get event count for {service}. Defaulting to full slice. Error: {e}")
-            total_events = MAX_EVENTS_PER_WORKER 
-        
-        if total_events == 0:
-            print(f"No events for {service} between {start_iso} and {end_iso}. Skipping.")
-            continue 
+            headers = get_jc_request_headers(
+                project_id, jc_api_key_secret_name, org_id, jc_auth_type
+            )
+        except ValueError as e:
+            print(str(e))
+            return str(e), 400
+        except requests.RequestException as e:
+            print(f"JumpCloud OAuth or network error: {e}")
+            return f"Authentication failed: {e}", 502
 
-        num_chunks = max(1, math.ceil(total_events / MAX_EVENTS_PER_WORKER))
-        time_slices = chunk_time_range(window_start, window_end, num_chunks)
-        print(f"Splitting {service} into {num_chunks} chunk(s) for the workers.")
-        
-        for slice_start, slice_end in time_slices:
-            message_body = {
-                'service': service,
-                'start_time': slice_start.isoformat("T").replace("+00:00", "Z"),
-                'end_time': slice_end.isoformat("T").replace("+00:00", "Z")
-            }
-            
-            # Publish to Pub/Sub and capture the Future object it returns
-            future = publisher.publish(topic_path, json.dumps(message_body).encode("utf-8"))
-            publish_futures.append(future)
-            
-            print(f"Queued job into Pub/Sub: {service} | {message_body['start_time']} to {message_body['end_time']}")
+        for service in service_list:
+            if service not in available_services:
+                print(f"Unknown service: {service}")
+                continue
+
+            start_iso = window_start.isoformat("T").replace("+00:00", "Z")
+            end_iso = window_end.isoformat("T").replace("+00:00", "Z")
+
+            count_url = "https://api.jumpcloud.com/insights/directory/v1/events/count"
+
+            count_body = {'service': [service], 'start_time': start_iso, 'end_time': end_iso}
+
+            print(f"[ORCHESTRATOR] Querying Count URL: {count_url} | Org: {org_label} | Service: {service}")
+            print(f"[ORCHESTRATOR] Payload: {count_body}")
+            try:
+                response = requests.post(count_url, json=count_body, headers=headers)
+                response.raise_for_status()
+                total_events = json.loads(response.text).get('count', 0)
+                print(f"Total events found for org {org_label} | {service}: {total_events}")
+            except Exception as e:
+                print(f"Failed to get event count for org {org_label} | {service}. Defaulting to full slice. Error: {e}")
+                total_events = MAX_EVENTS_PER_WORKER
+
+            if total_events == 0:
+                print(f"No events for org {org_label} | {service} between {start_iso} and {end_iso}. Skipping.")
+                continue
+
+            num_chunks = max(1, math.ceil(total_events / MAX_EVENTS_PER_WORKER))
+            time_slices = chunk_time_range(window_start, window_end, num_chunks)
+            print(f"Splitting org {org_label} | {service} into {num_chunks} chunk(s) for the workers.")
+
+            for slice_start, slice_end in time_slices:
+                message_body = {
+                    'service': service,
+                    'start_time': slice_start.isoformat("T").replace("+00:00", "Z"),
+                    'end_time': slice_end.isoformat("T").replace("+00:00", "Z"),
+                    'org_id': org_id,
+                }
+
+                future = publisher.publish(topic_path, json.dumps(message_body).encode("utf-8"))
+                publish_futures.append(future)
+
+                print(
+                    f"Queued job into Pub/Sub: org={org_label} | {service} | "
+                    f"{message_body['start_time']} to {message_body['end_time']}"
+                )
 
     # Wait for all messages to be successfully published before exiting the function
     if publish_futures:
@@ -354,15 +391,28 @@ def jc_worker(event, context):
         jc_org_id_secret_name = os.environ.get('jc_org_id', '')
         json_format = os.environ.get('json_format', 'MultiLine') # MultiLine, SingleLine, or NDJson
         jc_auth_type = os.environ.get("jc_auth_type", JC_AUTH_TYPE_API_KEY)
+        jc_multi_org = parse_jc_multi_org_flag(os.environ.get("jc_multi_org"))
     except KeyError as e:
         print(f"Missing environment variable: {e}")
         raise Exception(e)
 
-    jc_org_id = ""
-    if jc_org_id_secret_name:
-        fetched_id = get_secret(project_id, jc_org_id_secret_name).strip()
-        if fetched_id:
-            jc_org_id = fetched_id
+    pubsub_message = base64.b64decode(event['data']).decode('utf-8')
+    payload = json.loads(pubsub_message)
+    print(f"Received Job Payload: {payload}")
+
+    if "org_id" in payload:
+        _oid = payload.get("org_id")
+        jc_org_id = "" if _oid is None else str(_oid).strip()
+    elif jc_multi_org:
+        raise ValueError(
+            "Pub/Sub message is missing org_id; redeploy the orchestrator so each job includes org_id."
+        )
+    else:
+        jc_org_id = ""
+        if jc_org_id_secret_name:
+            fetched_id = get_secret(project_id, jc_org_id_secret_name).strip()
+            if fetched_id:
+                jc_org_id = fetched_id
 
     print("Worker building JumpCloud request headers (credentials from Secret Manager)...")
     try:
@@ -376,11 +426,6 @@ def jc_worker(event, context):
         print(f"JumpCloud OAuth or network error: {e}")
         raise Exception(e)
 
-    # Decode Pub/Sub message
-    pubsub_message = base64.b64decode(event['data']).decode('utf-8')
-    payload = json.loads(pubsub_message)
-    print(f"Received Job Payload: {payload}")
-    
     service = payload['service']
     start_date = payload['start_time']
     end_date = payload['end_time']
@@ -428,7 +473,8 @@ def jc_worker(event, context):
         return
         
     final_data.sort(key=lambda x: x['timestamp'], reverse=True)
-    out_file_name = f"jc_directoryinsights_{service}_{start_date}_{end_date}.json.gz"
+    org_prefix = f"{jc_org_id}_" if jc_org_id else ""
+    out_file_name = f"jc_directoryinsights_{org_prefix}{service}_{start_date}_{end_date}.json.gz"
     out_file_name = out_file_name.replace(":", "-") # Safe characters for Storage
     tmp_file_path = f"/tmp/{out_file_name}"
     
