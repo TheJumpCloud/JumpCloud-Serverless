@@ -55,6 +55,74 @@ def get_secret(project_id, secret_name):
         print(f"Error retrieving secret: {e}")
         raise Exception(e)
 
+# JumpCloud Directory Insights auth: API key (x-api-key) or OAuth client credentials (Bearer + x-org-id).
+JC_AUTH_TYPE_API_KEY = "APIKey"
+JC_AUTH_TYPE_SERVICE_TOKEN = "ServiceToken"
+JC_OAUTH_TOKEN_URL = "https://admin-oauth.id.jumpcloud.com/oauth2/token"
+JC_USER_AGENT = "JumpCloud_GCPServerless.DirectoryInsights/3.0.0"
+
+
+def _normalize_jc_auth_type(value):
+    if value is None or str(value).strip() == "":
+        return JC_AUTH_TYPE_API_KEY
+    return str(value).strip()
+
+
+def get_jc_request_headers(project_id, api_key_secret_name, jc_org_id, auth_type):
+    """
+    Build HTTP headers for Insights API calls.
+
+    - APIKey: secret is the JumpCloud API key; optional x-org-id when org secret is set.
+    - ServiceToken: secret is "clientID:clientSecret"; obtain OAuth access token via client_credentials,
+      then use Authorization: Bearer and x-org-id (org id required).
+    """
+    auth_type = _normalize_jc_auth_type(auth_type)
+    raw_secret = get_secret(project_id, api_key_secret_name).strip()
+
+    if auth_type == JC_AUTH_TYPE_API_KEY:
+        headers = {
+            "x-api-key": raw_secret,
+            "content-type": "application/json",
+            "user-agent": JC_USER_AGENT,
+        }
+        if jc_org_id:
+            headers["x-org-id"] = jc_org_id
+        return headers
+
+    if auth_type == JC_AUTH_TYPE_SERVICE_TOKEN:
+        if not jc_org_id:
+            raise ValueError(
+                "ServiceToken auth requires an organization ID (jc_org_id / org secret)."
+            )
+        if ":" not in raw_secret:
+            raise ValueError(
+                'ServiceToken auth requires the api-key secret to be "clientID:clientSecret".'
+            )
+        basic_b64 = base64.b64encode(raw_secret.encode("utf-8")).decode("ascii")
+        token_resp = requests.post(
+            JC_OAUTH_TOKEN_URL,
+            data={"scope": "api", "grant_type": "client_credentials"},
+            headers={
+                "Authorization": f"Basic {basic_b64}",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            timeout=60,
+        )
+        token_resp.raise_for_status()
+        token_json = token_resp.json()
+        access_token = token_json.get("access_token")
+        if not access_token:
+            raise ValueError("OAuth token response missing access_token")
+        return {
+            "Authorization": f"Bearer {access_token}",
+            "content-type": "application/json",
+            "user-agent": JC_USER_AGENT,
+            "x-org-id": jc_org_id,
+        }
+
+    raise ValueError(f"Unknown jc_auth_type: {auth_type!r}; use APIKey or ServiceToken.")
+
+
 def get_cron_time(cron_expression, time_tolerance):
     """Calculates the current and previous cron execution times."""
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -136,6 +204,7 @@ def jc_orchestrator(request):
         cron_schedule = os.environ['cron_schedule']
         topic_name = os.environ['pubsub_topic']
         service_env = os.environ['service']
+        jc_auth_type = os.environ.get("jc_auth_type", JC_AUTH_TYPE_API_KEY)
         print("Environment variables loaded successfully.")
     except KeyError as e:
         print(f"Missing env var: {e}")
@@ -151,16 +220,25 @@ def jc_orchestrator(request):
         print(f"[MANUAL] Overriding default service with: {test_service}")
         service_env = test_service
 
-    print("Fetching API Key from Secret Manager...")
-    jcapikey = get_secret(project_id, jc_api_key_secret_name)
-    
-    jc_org_id = "" 
+    jc_org_id = ""
     if jc_org_id_secret_name:
         print("Fetching Org ID from Secret Manager...")
         fetched_id = get_secret(project_id, jc_org_id_secret_name).strip()
         if fetched_id:
             jc_org_id = fetched_id
-            print(f"Org ID loaded")
+            print("Org ID loaded")
+
+    print("Building JumpCloud request headers (credentials from Secret Manager)...")
+    try:
+        headers = get_jc_request_headers(
+            project_id, jc_api_key_secret_name, jc_org_id, jc_auth_type
+        )
+    except ValueError as e:
+        print(str(e))
+        return str(e), 400
+    except requests.RequestException as e:
+        print(f"JumpCloud OAuth or network error: {e}")
+        return f"Authentication failed: {e}", 502
 
     # --- Time window: explicit [start_time, end_time] OR cron schedule ---
     has_start = raw_start is not None and str(raw_start).strip() != ""
@@ -199,14 +277,6 @@ def jc_orchestrator(request):
     if 'all' in service_list and len(service_list) > 1:
         print("Configuration contains 'all' alongside specific services. Defaulting to 'all'.")
         service_list = ['all']
-    
-    headers = {
-        'x-api-key': jcapikey,
-        'content-type': "application/json",
-        'user-agent': "JumpCloud_GCPServerless.DirectoryInsights/3.0.0"
-    }
-    if jc_org_id != '':                 
-        headers['x-org-id'] = jc_org_id
 
     # Grab the max events from the environment, defaulting to 25000 if not set
     MAX_EVENTS_PER_WORKER = int(os.environ.get('max_events_per_worker', 25000)) 
@@ -283,18 +353,28 @@ def jc_worker(event, context):
         bucket_name = os.environ['bucket_name']
         jc_org_id_secret_name = os.environ.get('jc_org_id', '')
         json_format = os.environ.get('json_format', 'MultiLine') # MultiLine, SingleLine, or NDJson
+        jc_auth_type = os.environ.get("jc_auth_type", JC_AUTH_TYPE_API_KEY)
     except KeyError as e:
         print(f"Missing environment variable: {e}")
         raise Exception(e)
 
-    print("Worker fetching API Key from Secret Manager...")
-    jcapikey = get_secret(project_id, jc_api_key_secret_name)
-    
-    jc_org_id = "" 
+    jc_org_id = ""
     if jc_org_id_secret_name:
         fetched_id = get_secret(project_id, jc_org_id_secret_name).strip()
         if fetched_id:
             jc_org_id = fetched_id
+
+    print("Worker building JumpCloud request headers (credentials from Secret Manager)...")
+    try:
+        headers = get_jc_request_headers(
+            project_id, jc_api_key_secret_name, jc_org_id, jc_auth_type
+        )
+    except ValueError as e:
+        print(str(e))
+        raise Exception(e)
+    except requests.RequestException as e:
+        print(f"JumpCloud OAuth or network error: {e}")
+        raise Exception(e)
 
     # Decode Pub/Sub message
     pubsub_message = base64.b64decode(event['data']).decode('utf-8')
@@ -312,15 +392,7 @@ def jc_worker(event, context):
         'end_time': end_date,
         "limit": 10000
     }
-    
-    headers = {
-        'x-api-key': jcapikey,
-        'content-type': "application/json",
-        'user-agent': "JumpCloud_GCPServerless.DirectoryInsights/3.0.0"
-    }
-    if jc_org_id != '':
-        headers['x-org-id'] = jc_org_id
-        
+
     final_data = []
     
     print(f"[WORKER] Querying Events URL: {url}")
