@@ -27,6 +27,10 @@ steps:
           echo "Invalid _JC_AUTH_TYPE: must be APIKey or ServiceToken"
           exit 1
         fi
+        if [[ "$_JC_MULTI_ORG" != "true" && "$_JC_MULTI_ORG" != "false" ]]; then
+          echo "Invalid _JC_MULTI_ORG: must be true or false"
+          exit 1
+        fi
 
   # Storage bucket creation
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
@@ -83,7 +87,7 @@ steps:
       - --region=$_REGION_LOCATION
       - --source=.
       - --runtime=python312
-      - --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,jc_api_key_secret=${_RESOURCE_PREFIX}-api-key,jc_org_id=${_RESOURCE_PREFIX}-org-id,cron_schedule=$_SCHEDULE_CRON_TIME,service=$_JC_SERVICE,pubsub_topic=${_RESOURCE_PREFIX}-jobs,max_events_per_worker=$_MAX_EVENTS_PER_WORKER,jc_auth_type=$_JC_AUTH_TYPE
+      - --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,jc_api_key_secret=${_RESOURCE_PREFIX}-api-key,jc_org_id=${_RESOURCE_PREFIX}-org-id,cron_schedule=$_SCHEDULE_CRON_TIME,service=$_JC_SERVICE,pubsub_topic=${_RESOURCE_PREFIX}-jobs,max_events_per_worker=$_MAX_EVENTS_PER_WORKER,jc_auth_type=$_JC_AUTH_TYPE,jc_multi_org=$_JC_MULTI_ORG
       - --entry-point=jc_orchestrator
       - --trigger-http
       - --no-allow-unauthenticated
@@ -100,7 +104,7 @@ steps:
           --region=$_REGION_LOCATION \
           --source=. \
           --runtime=python312 \
-          --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,jc_api_key_secret=${_RESOURCE_PREFIX}-api-key,jc_org_id=${_RESOURCE_PREFIX}-org-id,bucket_name=${_RESOURCE_PREFIX}-di-bucket,json_format=$_JSON_FORMAT,jc_auth_type=$_JC_AUTH_TYPE \
+          --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,jc_api_key_secret=${_RESOURCE_PREFIX}-api-key,jc_org_id=${_RESOURCE_PREFIX}-org-id,bucket_name=${_RESOURCE_PREFIX}-di-bucket,json_format=$_JSON_FORMAT,jc_auth_type=$_JC_AUTH_TYPE,jc_multi_org=$_JC_MULTI_ORG \
           --entry-point=jc_worker \
           --memory=$_WORKER_MEMORY \
           --trigger-topic=${_RESOURCE_PREFIX}-jobs \
