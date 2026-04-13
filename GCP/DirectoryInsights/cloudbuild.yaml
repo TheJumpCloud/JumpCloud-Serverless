@@ -1,8 +1,9 @@
 substitutions:
-  # Authentication: APIKey (JumpCloud API key in the api-key secret) or ServiceToken (OAuth client credentials in the form clientID:clientSecret in the same secret).
-  _JC_AUTH_TYPE: "ServiceToken"
+  # Authentication: 'APIKey' (JumpCloud API key in the api-key secret) or 'ServiceToken' (OAuth client credentials in the form clientID:clientSecret in the same secret).
+  _JC_AUTH_TYPE: "APIKey"
   _JC_API_KEY: "CHANGEVALUE"
   _JC_ORG_ID: "CHANGEVALUE"
+  # true = treat _JC_ORG_ID / org secret as comma-separated org list (e.g. "org1,org2"); false = one org id (entire string) (default).
   _JC_MULTI_ORG: "false"
   _JC_SERVICE: "CHANGEVALUE" # Can accept multiple values' for example:  _JC_SERVICE: directory,systems or gather logs from all services with the _JC_SERVICE: all. Available services:
   ### all, access_management, alerts, asset_management, directory, ldap, mdm, notifications, object_storage, password_manager, radius, reports, saas_app_management, software, sso, systems, workflows. ###
