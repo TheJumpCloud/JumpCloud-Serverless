@@ -167,15 +167,16 @@ def build_org_id_list(org_secret_raw, multi_org):
 
 def mask_org_id_for_logs(org_id):
     """
-    Log-safe org ID: first four characters, remainder replaced with asterisks.
+    Log-safe org ID: last four characters visible; all preceding characters replaced with asterisks.
     Does not alter values used for API calls, Pub/Sub payloads, or object names.
     """
     if org_id is None or str(org_id).strip() == "":
         return "(no x-org-id)"
     s = str(org_id).strip()
     n = len(s)
-    show = min(4, n)
-    return s[:show] + "*" * (n - show)
+    if n <= 4:
+        return s
+    return "*" * (n - 4) + s[-4:]
 
 
 def mask_org_id_in_text(text, org_id):
