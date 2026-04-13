@@ -145,6 +145,29 @@ def build_org_id_list(org_secret_raw, multi_org):
     return [""]
 
 
+def mask_org_id_for_logs(org_id):
+    """
+    Log-safe org ID: first four characters, remainder replaced with asterisks.
+    Does not alter values used for API calls, Pub/Sub payloads, or object names.
+    """
+    if org_id is None or str(org_id).strip() == "":
+        return "(no x-org-id)"
+    s = str(org_id).strip()
+    n = len(s)
+    show = min(4, n)
+    return s[:show] + "*" * (n - show)
+
+
+def mask_org_id_in_text(text, org_id):
+    """Replace a literal org id in a string once (e.g. log line that echoes a filename)."""
+    if not org_id or not text:
+        return text
+    oid = str(org_id).strip()
+    if not oid:
+        return text
+    return text.replace(oid, mask_org_id_for_logs(oid), 1)
+
+
 def get_cron_time(cron_expression, time_tolerance):
     """Calculates the current and previous cron execution times."""
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -304,7 +327,7 @@ def jc_orchestrator(request):
     publish_futures = []
 
     for org_id in org_ids:
-        org_label = org_id if org_id else "(no x-org-id)"
+        org_label = mask_org_id_for_logs(org_id)
         print(f"[ORCHESTRATOR] Organization context: {org_label}")
 
         try:
@@ -398,7 +421,10 @@ def jc_worker(event, context):
 
     pubsub_message = base64.b64decode(event['data']).decode('utf-8')
     payload = json.loads(pubsub_message)
-    print(f"Received Job Payload: {payload}")
+    _log_payload = dict(payload)
+    if "org_id" in _log_payload:
+        _log_payload["org_id"] = mask_org_id_for_logs(_log_payload.get("org_id"))
+    print(f"Received Job Payload: {_log_payload}")
 
     if "org_id" in payload:
         _oid = payload.get("org_id")
@@ -495,8 +521,9 @@ def jc_worker(event, context):
         print(f"Error compressing file: {e}")
         raise Exception(e)
 
-    # Upload to Cloud Storage
-    print(f"Uploading {out_file_name} to Cloud Storage bucket: {bucket_name}...")
+    # Upload to Cloud Storage (log line masks org segment; object name remains full org id)
+    _log_object_name = mask_org_id_in_text(out_file_name, jc_org_id)
+    print(f"Uploading {_log_object_name} to Cloud Storage bucket: {bucket_name}...")
     try:
         client = storage.Client()
         bucket = client.bucket(bucket_name)
