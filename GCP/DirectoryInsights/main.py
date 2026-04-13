@@ -68,32 +68,20 @@ def _normalize_jc_auth_type(value):
     return str(value).strip()
 
 
-def get_jc_request_headers(project_id, api_key_secret_name, jc_org_id, auth_type):
+def prepare_jc_auth(project_id, api_key_secret_name, auth_type):
     """
-    Build HTTP headers for Insights API calls.
+    Load credential from Secret Manager once; for ServiceToken, exchange for an OAuth access token once.
 
-    - APIKey: secret is the JumpCloud API key; optional x-org-id when org secret is set.
-    - ServiceToken: secret is "clientID:clientSecret"; obtain OAuth access token via client_credentials,
-      then use Authorization: Bearer and x-org-id (org id required).
+    Use with build_jc_request_headers_from_prepared() per org so multi-org runs do not repeat Secret Manager
+    access or token round-trips (only x-org-id differs per organization).
     """
     auth_type = _normalize_jc_auth_type(auth_type)
     raw_secret = get_secret(project_id, api_key_secret_name).strip()
 
     if auth_type == JC_AUTH_TYPE_API_KEY:
-        headers = {
-            "x-api-key": raw_secret,
-            "content-type": "application/json",
-            "user-agent": JC_USER_AGENT,
-        }
-        if jc_org_id:
-            headers["x-org-id"] = jc_org_id
-        return headers
+        return {"kind": JC_AUTH_TYPE_API_KEY, "api_key": raw_secret}
 
     if auth_type == JC_AUTH_TYPE_SERVICE_TOKEN:
-        if not jc_org_id:
-            raise ValueError(
-                "ServiceToken auth requires an organization ID (jc_org_id / org secret)."
-            )
         if ":" not in raw_secret:
             raise ValueError(
                 'ServiceToken auth requires the api-key secret to be "clientID:clientSecret".'
@@ -113,14 +101,46 @@ def get_jc_request_headers(project_id, api_key_secret_name, jc_org_id, auth_type
         access_token = token_json.get("access_token")
         if not access_token:
             raise ValueError("OAuth token response missing access_token")
+        return {"kind": JC_AUTH_TYPE_SERVICE_TOKEN, "access_token": access_token}
+
+    raise ValueError(f"Unknown jc_auth_type: {auth_type!r}; use APIKey or ServiceToken.")
+
+
+def build_jc_request_headers_from_prepared(prepared, jc_org_id):
+    """Build request headers for one org from prepare_jc_auth() result (same credential, org-specific x-org-id)."""
+    kind = prepared["kind"]
+    if kind == JC_AUTH_TYPE_API_KEY:
+        headers = {
+            "x-api-key": prepared["api_key"],
+            "content-type": "application/json",
+            "user-agent": JC_USER_AGENT,
+        }
+        if jc_org_id:
+            headers["x-org-id"] = jc_org_id
+        return headers
+
+    if kind == JC_AUTH_TYPE_SERVICE_TOKEN:
+        if not jc_org_id:
+            raise ValueError(
+                "ServiceToken auth requires an organization ID (jc_org_id / org secret)."
+            )
         return {
-            "Authorization": f"Bearer {access_token}",
+            "Authorization": f"Bearer {prepared['access_token']}",
             "content-type": "application/json",
             "user-agent": JC_USER_AGENT,
             "x-org-id": jc_org_id,
         }
 
-    raise ValueError(f"Unknown jc_auth_type: {auth_type!r}; use APIKey or ServiceToken.")
+    raise ValueError(f"Unknown prepared auth kind: {kind!r}")
+
+
+def get_jc_request_headers(project_id, api_key_secret_name, jc_org_id, auth_type):
+    """
+    Build HTTP headers for Insights API calls (single org). Fetches secret once and obtains OAuth token once
+    when using ServiceToken — suitable for the Worker, which handles one org per invocation.
+    """
+    prepared = prepare_jc_auth(project_id, api_key_secret_name, auth_type)
+    return build_jc_request_headers_from_prepared(prepared, jc_org_id)
 
 
 def parse_jc_multi_org_flag(value):
@@ -326,20 +346,28 @@ def jc_orchestrator(request):
     # Create a list to track all of our Pub/Sub publish operations
     publish_futures = []
 
+    # One Secret Manager read + one OAuth token exchange (ServiceToken); per-org only varies x-org-id.
+    print("Preparing JumpCloud authentication (Secret Manager; OAuth if ServiceToken)...")
+    try:
+        jc_auth_prepared = prepare_jc_auth(
+            project_id, jc_api_key_secret_name, jc_auth_type
+        )
+    except ValueError as e:
+        print(str(e))
+        return str(e), 400
+    except requests.RequestException as e:
+        print(f"JumpCloud OAuth or network error: {e}")
+        return f"Authentication failed: {e}", 502
+
     for org_id in org_ids:
         org_label = mask_org_id_for_logs(org_id)
         print(f"[ORCHESTRATOR] Organization context: {org_label}")
 
         try:
-            headers = get_jc_request_headers(
-                project_id, jc_api_key_secret_name, org_id, jc_auth_type
-            )
+            headers = build_jc_request_headers_from_prepared(jc_auth_prepared, org_id)
         except ValueError as e:
             print(str(e))
             return str(e), 400
-        except requests.RequestException as e:
-            print(f"JumpCloud OAuth or network error: {e}")
-            return f"Authentication failed: {e}", 502
 
         for service in service_list:
             if service not in available_services:
