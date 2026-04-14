@@ -1,6 +1,7 @@
 substitutions:
   # Authentication: 'APIKey' (JumpCloud API key in the api-key secret) or 'ServiceToken' (OAuth client credentials in the form clientID:clientSecret in the same secret).
   _JC_AUTH_TYPE: "APIKey"
+  # API Key: API key (x-api-key) for APIKey auth type. For ServiceToken auth type, this is the clientID:clientSecret in the same secret.
   _JC_API_KEY: "CHANGEVALUE"
   _JC_ORG_ID: "CHANGEVALUE"
   # true = treat _JC_ORG_ID / org secret as comma-separated org list (e.g. "org1,org2"); false = one org id (entire string) (default).
