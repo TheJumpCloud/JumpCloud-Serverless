@@ -1,6 +1,11 @@
 substitutions:
+  # Authentication: 'APIKey' (JumpCloud API key in the api-key secret) or 'ServiceToken' (OAuth client credentials in the form clientID:clientSecret in the same secret).
+  _JC_AUTH_TYPE: "APIKey"
+  # API Key: API key (x-api-key) for APIKey auth type. For ServiceToken auth type, this is the clientID:clientSecret in the same secret.
   _JC_API_KEY: "CHANGEVALUE"
   _JC_ORG_ID: "CHANGEVALUE"
+  # true = treat _JC_ORG_ID / org secret as comma-separated org list (e.g. "org1,org2"); false = one org id (entire string) (default).
+  _JC_MULTI_ORG: "false"
   _JC_SERVICE: "CHANGEVALUE" # Can accept multiple values' for example:  _JC_SERVICE: directory,systems or gather logs from all services with the _JC_SERVICE: all. Available services:
   ### all, access_management, alerts, asset_management, directory, ldap, mdm, notifications, object_storage, password_manager, radius, reports, saas_app_management, software, sso, systems, workflows. ###
   # Prefix for GCS bucket, secrets, functions, Pub/Sub, and scheduler.
@@ -20,6 +25,15 @@ steps:
       - -c
       - |
         if [[ "$_JSON_FORMAT" != "MultiLine" && "$_JSON_FORMAT" != "SingleLine" && "$_JSON_FORMAT" != "NDJson" ]]; then
+          echo "Invalid _JSON_FORMAT: must be MultiLine, SingleLine, or NDJson"
+          exit 1
+        fi
+        if [[ "$_JC_AUTH_TYPE" != "APIKey" && "$_JC_AUTH_TYPE" != "ServiceToken" ]]; then
+          echo "Invalid _JC_AUTH_TYPE: must be APIKey or ServiceToken"
+          exit 1
+        fi
+        if [[ "$_JC_MULTI_ORG" != "true" && "$_JC_MULTI_ORG" != "false" ]]; then
+          echo "Invalid _JC_MULTI_ORG: must be true or false"
           exit 1
         fi
 
@@ -32,14 +46,29 @@ steps:
         gsutil ls -p $_GCP_PROJECT_ID_NAME gs://${_RESOURCE_PREFIX}-di-bucket >/dev/null 2>&1 || \
         gsutil mb -p $_GCP_PROJECT_ID_NAME -c $_STORAGE_CLASS -l $_REGION_LOCATION gs://${_RESOURCE_PREFIX}-di-bucket
 
-  # Create Secrets
+  # Create or update Secrets (new version becomes "latest" for functions using versions/latest)
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     entrypoint: bash
     args:
       - -c
       - |
-        echo -n "$_JC_API_KEY" | gcloud secrets create ${_RESOURCE_PREFIX}-api-key --data-file=- || true
-        echo -n "$_JC_ORG_ID" | gcloud secrets create ${_RESOURCE_PREFIX}-org-id --data-file=- || true
+        PROJECT_ID="$_GCP_PROJECT_ID_NAME"
+        API_SECRET="${_RESOURCE_PREFIX}-api-key"
+        ORG_SECRET="${_RESOURCE_PREFIX}-org-id"
+        if gcloud secrets describe "$$API_SECRET" --project="$$PROJECT_ID" >/dev/null 2>&1; then
+          echo "Updating secret version: $$API_SECRET"
+          echo -n "$_JC_API_KEY" | gcloud secrets versions add "$$API_SECRET" --project="$$PROJECT_ID" --data-file=-
+        else
+          echo "Creating secret: $$API_SECRET"
+          echo -n "$_JC_API_KEY" | gcloud secrets create "$$API_SECRET" --project="$$PROJECT_ID" --data-file=-
+        fi
+        if gcloud secrets describe "$$ORG_SECRET" --project="$$PROJECT_ID" >/dev/null 2>&1; then
+          echo "Updating secret version: $$ORG_SECRET"
+          echo -n "$_JC_ORG_ID" | gcloud secrets versions add "$$ORG_SECRET" --project="$$PROJECT_ID" --data-file=-
+        else
+          echo "Creating secret: $$ORG_SECRET"
+          echo -n "$_JC_ORG_ID" | gcloud secrets create "$$ORG_SECRET" --project="$$PROJECT_ID" --data-file=-
+        fi
 
   # Create Pub/Sub Topics (Main queue and DLQ)
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
@@ -63,7 +92,7 @@ steps:
       - --region=$_REGION_LOCATION
       - --source=.
       - --runtime=python312
-      - --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,jc_api_key_secret=${_RESOURCE_PREFIX}-api-key,jc_org_id=${_RESOURCE_PREFIX}-org-id,cron_schedule=$_SCHEDULE_CRON_TIME,service=$_JC_SERVICE,pubsub_topic=${_RESOURCE_PREFIX}-jobs,max_events_per_worker=$_MAX_EVENTS_PER_WORKER
+      - --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,jc_api_key_secret=${_RESOURCE_PREFIX}-api-key,jc_org_id=${_RESOURCE_PREFIX}-org-id,cron_schedule=$_SCHEDULE_CRON_TIME,service=$_JC_SERVICE,pubsub_topic=${_RESOURCE_PREFIX}-jobs,max_events_per_worker=$_MAX_EVENTS_PER_WORKER,jc_auth_type=$_JC_AUTH_TYPE,jc_multi_org=$_JC_MULTI_ORG
       - --entry-point=jc_orchestrator
       - --trigger-http
       - --no-allow-unauthenticated
@@ -80,7 +109,7 @@ steps:
           --region=$_REGION_LOCATION \
           --source=. \
           --runtime=python312 \
-          --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,jc_api_key_secret=${_RESOURCE_PREFIX}-api-key,jc_org_id=${_RESOURCE_PREFIX}-org-id,bucket_name=${_RESOURCE_PREFIX}-di-bucket,json_format=$_JSON_FORMAT \
+          --set-env-vars=gcp_project_id=$_GCP_PROJECT_ID_NAME,jc_api_key_secret=${_RESOURCE_PREFIX}-api-key,jc_org_id=${_RESOURCE_PREFIX}-org-id,bucket_name=${_RESOURCE_PREFIX}-di-bucket,json_format=$_JSON_FORMAT,jc_auth_type=$_JC_AUTH_TYPE,jc_multi_org=$_JC_MULTI_ORG \
           --entry-point=jc_worker \
           --memory=$_WORKER_MEMORY \
           --trigger-topic=${_RESOURCE_PREFIX}-jobs \

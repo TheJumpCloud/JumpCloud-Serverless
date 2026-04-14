@@ -55,6 +55,140 @@ def get_secret(project_id, secret_name):
         print(f"Error retrieving secret: {e}")
         raise Exception(e)
 
+# JumpCloud Directory Insights auth: API key (x-api-key) or OAuth client credentials (Bearer + x-org-id).
+JC_AUTH_TYPE_API_KEY = "APIKey"
+JC_AUTH_TYPE_SERVICE_TOKEN = "ServiceToken"
+JC_OAUTH_TOKEN_URL = "https://admin-oauth.id.jumpcloud.com/oauth2/token"
+JC_USER_AGENT = "JumpCloud_GCPServerless.DirectoryInsights/3.1.0"
+
+
+def _normalize_jc_auth_type(value):
+    if value is None or str(value).strip() == "":
+        return JC_AUTH_TYPE_API_KEY
+    return str(value).strip()
+
+
+def prepare_jc_auth(project_id, api_key_secret_name, auth_type):
+    """
+    Load credential from Secret Manager once; for ServiceToken, exchange for an OAuth access token once.
+
+    Use with build_jc_request_headers_from_prepared() per org so multi-org runs do not repeat Secret Manager
+    access or token round-trips (only x-org-id differs per organization).
+    """
+    auth_type = _normalize_jc_auth_type(auth_type)
+    raw_secret = get_secret(project_id, api_key_secret_name).strip()
+
+    if auth_type == JC_AUTH_TYPE_API_KEY:
+        return {"kind": JC_AUTH_TYPE_API_KEY, "api_key": raw_secret}
+
+    if auth_type == JC_AUTH_TYPE_SERVICE_TOKEN:
+        if ":" not in raw_secret:
+            raise ValueError(
+                'ServiceToken auth requires the api-key secret to be "clientID:clientSecret".'
+            )
+        basic_b64 = base64.b64encode(raw_secret.encode("utf-8")).decode("ascii")
+        token_resp = requests.post(
+            JC_OAUTH_TOKEN_URL,
+            data={"scope": "api", "grant_type": "client_credentials"},
+            headers={
+                "Authorization": f"Basic {basic_b64}",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            timeout=60,
+        )
+        token_resp.raise_for_status()
+        token_json = token_resp.json()
+        access_token = token_json.get("access_token")
+        if not access_token:
+            raise ValueError("OAuth token response missing access_token")
+        return {"kind": JC_AUTH_TYPE_SERVICE_TOKEN, "access_token": access_token}
+
+    raise ValueError(f"Unknown jc_auth_type: {auth_type!r}; use APIKey or ServiceToken.")
+
+
+def build_jc_request_headers_from_prepared(prepared, jc_org_id):
+    """Build request headers for one org from prepare_jc_auth() result (same credential, org-specific x-org-id)."""
+    kind = prepared["kind"]
+    if kind == JC_AUTH_TYPE_API_KEY:
+        headers = {
+            "x-api-key": prepared["api_key"],
+            "content-type": "application/json",
+            "user-agent": JC_USER_AGENT,
+        }
+        if jc_org_id:
+            headers["x-org-id"] = jc_org_id
+        return headers
+
+    if kind == JC_AUTH_TYPE_SERVICE_TOKEN:
+        if not jc_org_id:
+            raise ValueError(
+                "ServiceToken auth requires an organization ID (jc_org_id / org secret)."
+            )
+        return {
+            "Authorization": f"Bearer {prepared['access_token']}",
+            "content-type": "application/json",
+            "user-agent": JC_USER_AGENT,
+            "x-org-id": jc_org_id,
+        }
+
+    raise ValueError(f"Unknown prepared auth kind: {kind!r}")
+
+
+def get_jc_request_headers(project_id, api_key_secret_name, jc_org_id, auth_type):
+    """
+    Build HTTP headers for Insights API calls (single org). Fetches secret once and obtains OAuth token once
+    when using ServiceToken — suitable for the Worker, which handles one org per invocation.
+    """
+    prepared = prepare_jc_auth(project_id, api_key_secret_name, auth_type)
+    return build_jc_request_headers_from_prepared(prepared, jc_org_id)
+
+
+def parse_jc_multi_org_flag(value):
+    """True when env jc_multi_org enables comma-separated org list in the org secret."""
+    if value is None:
+        return False
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
+def build_org_id_list(org_secret_raw, multi_org):
+    """
+    Build the list of org IDs to process.
+
+    multi_org False: one org; empty secret yields [''] (optional x-org-id for API key).
+    multi_org True: split on comma; whitespace trimmed; empty list if no ids.
+    """
+    raw = (org_secret_raw or "").strip()
+    if multi_org:
+        return [p.strip() for p in raw.split(",") if p.strip()]
+    if raw:
+        return [raw]
+    return [""]
+
+
+def mask_org_id_for_logs(org_id):
+    """
+    Log-safe org ID: last four characters visible; all preceding characters replaced with asterisks.
+    Does not alter values used for API calls, Pub/Sub payloads, or object names.
+    """
+    if org_id is None or str(org_id).strip() == "":
+        return "(no x-org-id)"
+    s = str(org_id).strip()
+    n = len(s)
+    if n <= 4:
+        return s
+    return "*" * (n - 4) + s[-4:]
+
+
+def mask_org_id_in_text(text, org_id):
+    """Replace a literal org id in a string once (e.g. log line that echoes a filename)."""
+    if not org_id or not text:
+        return text
+    oid = str(org_id).strip()
+    if not oid:
+        return text
+    return text.replace(oid, mask_org_id_for_logs(oid), 1)
+
+
 def get_cron_time(cron_expression, time_tolerance):
     """Calculates the current and previous cron execution times."""
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -136,6 +270,8 @@ def jc_orchestrator(request):
         cron_schedule = os.environ['cron_schedule']
         topic_name = os.environ['pubsub_topic']
         service_env = os.environ['service']
+        jc_auth_type = os.environ.get("jc_auth_type", JC_AUTH_TYPE_API_KEY)
+        jc_multi_org = parse_jc_multi_org_flag(os.environ.get("jc_multi_org"))
         print("Environment variables loaded successfully.")
     except KeyError as e:
         print(f"Missing env var: {e}")
@@ -151,16 +287,21 @@ def jc_orchestrator(request):
         print(f"[MANUAL] Overriding default service with: {test_service}")
         service_env = test_service
 
-    print("Fetching API Key from Secret Manager...")
-    jcapikey = get_secret(project_id, jc_api_key_secret_name)
-    
-    jc_org_id = "" 
+    org_secret_raw = ""
     if jc_org_id_secret_name:
-        print("Fetching Org ID from Secret Manager...")
-        fetched_id = get_secret(project_id, jc_org_id_secret_name).strip()
-        if fetched_id:
-            jc_org_id = fetched_id
-            print(f"Org ID loaded")
+        print("Fetching Org ID(s) from Secret Manager...")
+        org_secret_raw = get_secret(project_id, jc_org_id_secret_name).strip()
+        if org_secret_raw:
+            print("Org secret loaded")
+
+    org_ids = build_org_id_list(org_secret_raw, jc_multi_org)
+    if jc_multi_org and not org_ids:
+        error_msg = (
+            "jc_multi_org is true but no organization IDs were found in the org secret "
+            "(use a comma-separated list, e.g. orgId1,orgId2)."
+        )
+        print(error_msg)
+        return error_msg, 400
 
     # --- Time window: explicit [start_time, end_time] OR cron schedule ---
     has_start = raw_start is not None and str(raw_start).strip() != ""
@@ -199,14 +340,6 @@ def jc_orchestrator(request):
     if 'all' in service_list and len(service_list) > 1:
         print("Configuration contains 'all' alongside specific services. Defaulting to 'all'.")
         service_list = ['all']
-    
-    headers = {
-        'x-api-key': jcapikey,
-        'content-type': "application/json",
-        'user-agent': "JumpCloud_GCPServerless.DirectoryInsights/3.0.0"
-    }
-    if jc_org_id != '':                 
-        headers['x-org-id'] = jc_org_id
 
     # Grab the max events from the environment, defaulting to 25000 if not set
     MAX_EVENTS_PER_WORKER = int(os.environ.get('max_events_per_worker', 25000)) 
@@ -214,49 +347,75 @@ def jc_orchestrator(request):
     # Create a list to track all of our Pub/Sub publish operations
     publish_futures = []
 
-    for service in service_list:
-        if service not in available_services:
-            print(f"Unknown service: {service}")
-            continue
+    # One Secret Manager read + one OAuth token exchange (ServiceToken); per-org only varies x-org-id.
+    print("Preparing JumpCloud authentication (Secret Manager; OAuth if ServiceToken)...")
+    try:
+        jc_auth_prepared = prepare_jc_auth(
+            project_id, jc_api_key_secret_name, jc_auth_type
+        )
+    except ValueError as e:
+        print(str(e))
+        return str(e), 400
+    except requests.RequestException as e:
+        print(f"JumpCloud OAuth or network error: {e}")
+        return f"Authentication failed: {e}", 502
 
-        start_iso = window_start.isoformat("T").replace("+00:00", "Z")
-        end_iso = window_end.isoformat("T").replace("+00:00", "Z")
-        
-        count_url = "https://api.jumpcloud.com/insights/directory/v1/events/count"
-        
-        count_body = {'service': [service], 'start_time': start_iso, 'end_time': end_iso}
-        
-        print(f"[ORCHESTRATOR] Querying Count URL: {count_url} | Service: {service}")
-        print(f"[ORCHESTRATOR] Payload: {count_body}")
+    for org_id in org_ids:
+        org_label = mask_org_id_for_logs(org_id)
+        print(f"[ORCHESTRATOR] Organization context: {org_label}")
+
         try:
-            response = requests.post(count_url, json=count_body, headers=headers)
-            response.raise_for_status()
-            total_events = json.loads(response.text).get('count', 0)
-            print(f"Total events found for {service}: {total_events}")
-        except Exception as e:
-            print(f"Failed to get event count for {service}. Defaulting to full slice. Error: {e}")
-            total_events = MAX_EVENTS_PER_WORKER 
-        
-        if total_events == 0:
-            print(f"No events for {service} between {start_iso} and {end_iso}. Skipping.")
-            continue 
+            headers = build_jc_request_headers_from_prepared(jc_auth_prepared, org_id)
+        except ValueError as e:
+            print(str(e))
+            return str(e), 400
 
-        num_chunks = max(1, math.ceil(total_events / MAX_EVENTS_PER_WORKER))
-        time_slices = chunk_time_range(window_start, window_end, num_chunks)
-        print(f"Splitting {service} into {num_chunks} chunk(s) for the workers.")
-        
-        for slice_start, slice_end in time_slices:
-            message_body = {
-                'service': service,
-                'start_time': slice_start.isoformat("T").replace("+00:00", "Z"),
-                'end_time': slice_end.isoformat("T").replace("+00:00", "Z")
-            }
-            
-            # Publish to Pub/Sub and capture the Future object it returns
-            future = publisher.publish(topic_path, json.dumps(message_body).encode("utf-8"))
-            publish_futures.append(future)
-            
-            print(f"Queued job into Pub/Sub: {service} | {message_body['start_time']} to {message_body['end_time']}")
+        for service in service_list:
+            if service not in available_services:
+                print(f"Unknown service: {service}")
+                continue
+
+            start_iso = window_start.isoformat("T").replace("+00:00", "Z")
+            end_iso = window_end.isoformat("T").replace("+00:00", "Z")
+
+            count_url = "https://api.jumpcloud.com/insights/directory/v1/events/count"
+
+            count_body = {'service': [service], 'start_time': start_iso, 'end_time': end_iso}
+
+            print(f"[ORCHESTRATOR] Querying Count URL: {count_url} | Org: {org_label} | Service: {service}")
+            print(f"[ORCHESTRATOR] Payload: {count_body}")
+            try:
+                response = requests.post(count_url, json=count_body, headers=headers)
+                response.raise_for_status()
+                total_events = json.loads(response.text).get('count', 0)
+                print(f"Total events found for org {org_label} | {service}: {total_events}")
+            except Exception as e:
+                print(f"Failed to get event count for org {org_label} | {service}. Defaulting to full slice. Error: {e}")
+                total_events = MAX_EVENTS_PER_WORKER
+
+            if total_events == 0:
+                print(f"No events for org {org_label} | {service} between {start_iso} and {end_iso}. Skipping.")
+                continue
+
+            num_chunks = max(1, math.ceil(total_events / MAX_EVENTS_PER_WORKER))
+            time_slices = chunk_time_range(window_start, window_end, num_chunks)
+            print(f"Splitting org {org_label} | {service} into {num_chunks} chunk(s) for the workers.")
+
+            for slice_start, slice_end in time_slices:
+                message_body = {
+                    'service': service,
+                    'start_time': slice_start.isoformat("T").replace("+00:00", "Z"),
+                    'end_time': slice_end.isoformat("T").replace("+00:00", "Z"),
+                    'org_id': org_id,
+                }
+
+                future = publisher.publish(topic_path, json.dumps(message_body).encode("utf-8"))
+                publish_futures.append(future)
+
+                print(
+                    f"Queued job into Pub/Sub: org={org_label} | {service} | "
+                    f"{message_body['start_time']} to {message_body['end_time']}"
+                )
 
     # Wait for all messages to be successfully published before exiting the function
     if publish_futures:
@@ -283,24 +442,45 @@ def jc_worker(event, context):
         bucket_name = os.environ['bucket_name']
         jc_org_id_secret_name = os.environ.get('jc_org_id', '')
         json_format = os.environ.get('json_format', 'MultiLine') # MultiLine, SingleLine, or NDJson
+        jc_auth_type = os.environ.get("jc_auth_type", JC_AUTH_TYPE_API_KEY)
+        jc_multi_org = parse_jc_multi_org_flag(os.environ.get("jc_multi_org"))
     except KeyError as e:
         print(f"Missing environment variable: {e}")
         raise Exception(e)
 
-    print("Worker fetching API Key from Secret Manager...")
-    jcapikey = get_secret(project_id, jc_api_key_secret_name)
-    
-    jc_org_id = "" 
-    if jc_org_id_secret_name:
-        fetched_id = get_secret(project_id, jc_org_id_secret_name).strip()
-        if fetched_id:
-            jc_org_id = fetched_id
-
-    # Decode Pub/Sub message
     pubsub_message = base64.b64decode(event['data']).decode('utf-8')
     payload = json.loads(pubsub_message)
-    print(f"Received Job Payload: {payload}")
-    
+    _log_payload = dict(payload)
+    if "org_id" in _log_payload:
+        _log_payload["org_id"] = mask_org_id_for_logs(_log_payload.get("org_id"))
+    print(f"Received Job Payload: {_log_payload}")
+
+    if "org_id" in payload:
+        _oid = payload.get("org_id")
+        jc_org_id = "" if _oid is None else str(_oid).strip()
+    elif jc_multi_org:
+        raise ValueError(
+            "Pub/Sub message is missing org_id; redeploy the orchestrator so each job includes org_id."
+        )
+    else:
+        jc_org_id = ""
+        if jc_org_id_secret_name:
+            fetched_id = get_secret(project_id, jc_org_id_secret_name).strip()
+            if fetched_id:
+                jc_org_id = fetched_id
+
+    print("Worker building JumpCloud request headers (credentials from Secret Manager)...")
+    try:
+        headers = get_jc_request_headers(
+            project_id, jc_api_key_secret_name, jc_org_id, jc_auth_type
+        )
+    except ValueError as e:
+        print(str(e))
+        raise Exception(e)
+    except requests.RequestException as e:
+        print(f"JumpCloud OAuth or network error: {e}")
+        raise Exception(e)
+
     service = payload['service']
     start_date = payload['start_time']
     end_date = payload['end_time']
@@ -312,15 +492,7 @@ def jc_worker(event, context):
         'end_time': end_date,
         "limit": 10000
     }
-    
-    headers = {
-        'x-api-key': jcapikey,
-        'content-type': "application/json",
-        'user-agent': "JumpCloud_GCPServerless.DirectoryInsights/3.0.0"
-    }
-    if jc_org_id != '':
-        headers['x-org-id'] = jc_org_id
-        
+
     final_data = []
     
     print(f"[WORKER] Querying Events URL: {url}")
@@ -356,7 +528,8 @@ def jc_worker(event, context):
         return
         
     final_data.sort(key=lambda x: x['timestamp'], reverse=True)
-    out_file_name = f"jc_directoryinsights_{service}_{start_date}_{end_date}.json.gz"
+    org_prefix = f"{jc_org_id}_" if jc_org_id else ""
+    out_file_name = f"jc_directoryinsights_{org_prefix}{service}_{start_date}_{end_date}.json.gz"
     out_file_name = out_file_name.replace(":", "-") # Safe characters for Storage
     tmp_file_path = f"/tmp/{out_file_name}"
     
@@ -377,8 +550,9 @@ def jc_worker(event, context):
         print(f"Error compressing file: {e}")
         raise Exception(e)
 
-    # Upload to Cloud Storage
-    print(f"Uploading {out_file_name} to Cloud Storage bucket: {bucket_name}...")
+    # Upload to Cloud Storage (log line masks org segment; object name remains full org id)
+    _log_object_name = mask_org_id_in_text(out_file_name, jc_org_id)
+    print(f"Uploading {_log_object_name} to Cloud Storage bucket: {bucket_name}...")
     try:
         client = storage.Client()
         bucket = client.bucket(bucket_name)

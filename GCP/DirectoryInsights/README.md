@@ -18,7 +18,10 @@ _Note: This document assumes the use of Python 3.12 on GCP Cloud Functions_
   - [Key Features](#key-features)
 - [Pre-requisites](#pre-requisites)
 - [Create Directory to Store Directory Insights Files](#create-directory-to-store-directory-insights-files)
-- [Edit CloudBuild.yaml](#edit-cloudbuildyaml)
+- [Edit `cloudbuild.yaml`](#edit-cloudbuildyaml)
+- [Cloud Build substitutions](#cloud-build-substitutions)
+- [Authentication: API key and service account (OAuth)](#authentication-api-key-and-service-account-oauth)
+- [Multiple organizations](#multiple-organizations)
 - [Deploying the Application](#deploying-the-application)
 - [Manual Testing \& Historical Backfill](#manual-testing--historical-backfill)
   - [Option 1: Using the Google Cloud Console](#option-1-using-the-google-cloud-console)
@@ -61,17 +64,21 @@ The `gcloud builds submit` command orchestrates the creation of the following in
 
 ### 5. Secret Manager
 
-- **API Credentials:** Secure storage for your `JumpCloud API Key` and `Organization ID`, ensuring no sensitive credentials are hardcoded in the functions or environment variables.
+- **API credentials:** One secret holds the JumpCloud credential (API key **or** OAuth client ID and secret, depending on auth mode). A second secret holds the **organization ID** (single value, or a comma-separated list when multi-org mode is enabled). Values are created or **updated** on each successful build (a new secret version is added; functions use `latest`).
 
 ## Key Features
 
 - **Auto-Scaling:** If JumpCloud has 100,000 events in a 5-minute window, the Orchestrator will automatically split that into multiple Pub/Sub messages, allowing multiple Worker instances to process the data simultaneously.
+- **Authentication options:** Use a standard JumpCloud **API key** or **OAuth client credentials** (client ID and secret) to obtain bearer tokens for the Insights API. See [documentation on service Accounts](https://jumpcloud.com/support/service-account-for-apis)
+- **Multiple organizations:** Optional multi-org mode runs counts and exports per organization and writes distinct objects per org in Cloud Storage.
 - **BigQuery Ready:** When using the `NDJson` format, the application automatically sanitizes JSON keys (replacing spaces/hyphens with underscores) to ensure the files can be ingested into BigQuery without schema errors.
 - **Manual Recovery:** The "Force Run" logic allows you to trigger a large historical backfill (up to 90 days) simply by clicking "Force Run" in the Cloud Scheduler console.
 
 # Pre-requisites
 
-- [Your JumpCloud API key](https://docs.jumpcloud.com/2.0/authentication-and-authorization/authentication-and-authorization-overview)
+- JumpCloud credentials in one of these forms (see [Authentication](#authentication-api-key-and-service-account-oauth)):
+  - A [JumpCloud API key](https://docs.jumpcloud.com/2.0/authentication-and-authorization/authentication-and-authorization-overview) (`jca_...`), **or**
+  - An OAuth **client ID** and **client secret** pair from your JumpCloud admin OAuth / API integration, if you deploy with **ServiceToken** auth (organization ID is required for that mode).
 - Google Cloud Admin/Owner account with these roles:
   - `roles/serviceusage.serviceUsageAdmin`
   - `roles/cloudbuild.builds.editor`
@@ -134,9 +141,59 @@ gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJE
 
 Create a directory to store your Serverless Application and any dependencies required. In the root of that directory add [Directory Insights Files](https://github.com/TheJumpCloud/JumpCloud-Serverless/blob/master/GCP/DirectoryInsights/).
 
-# Edit CloudBuild.yaml
+# Edit `cloudbuild.yaml`
 
-In the root directory, edit cloudbuid.yaml file `substitutions` variable values `CHANGEVALUE` with the necessary credentials
+In the project directory, edit `cloudbuild.yaml` and set the `substitutions` values (replace `CHANGEVALUE` placeholders where applicable). See [Cloud Build substitutions](#cloud-build-substitutions) for every option.
+
+# Cloud Build substitutions
+
+| Substitution                         | Purpose                                                                                                                                                                                         |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `_JC_AUTH_TYPE`                      | `APIKey` (default) or `ServiceToken`. Controls how the Orchestrator and Worker authenticate to JumpCloud Insights.                                                                              |
+| `_JC_API_KEY`                        | Stored in Secret Manager as `{_RESOURCE_PREFIX}-api-key`. **APIKey:** your JumpCloud API key. **ServiceToken:** a single string `clientID:clientSecret` (used to obtain an OAuth access token). |
+| `_JC_ORG_ID`                         | Stored as `{_RESOURCE_PREFIX}-org-id`. **Single-org:** one organization ID. **Multi-org:** when `_JC_MULTI_ORG` is `true`, a comma-separated list, e.g. `orgId1,orgId2`.                        |
+| `_JC_MULTI_ORG`                      | `false` (default) or `true`. When `true`, `_JC_ORG_ID` is split on commas and each org is processed separately (separate count queries, Pub/Sub jobs, and output files).                        |
+| `_JC_SERVICE`                        | Insights services to collect (e.g. `all`, `directory`, or a comma-separated list).                                                                                                              |
+| `_RESOURCE_PREFIX`                   | Prefix for bucket name, secrets, function names, Pub/Sub topics, and scheduler job.                                                                                                             |
+| `_SCHEDULE_CRON_TIME`                | Cron schedule for the Orchestrator (UTC).                                                                                                                                                       |
+| `_GCP_PROJECT_ID_NAME`               | GCP project ID.                                                                                                                                                                                 |
+| `_JSON_FORMAT`                       | `MultiLine`, `SingleLine`, or `NDJson`.                                                                                                                                                         |
+| `_STORAGE_CLASS`, `_REGION_LOCATION` | Bucket storage class and region.                                                                                                                                                                |
+| `_MAX_EVENTS_PER_WORKER`             | Chunk size used by the Orchestrator when splitting work.                                                                                                                                        |
+| `_WORKER_MEMORY`                     | Memory for the Worker Cloud Function.                                                                                                                                                           |
+
+On each build, the pipeline **creates** the API key and org secrets if they do not exist, or **adds a new version** if they already exist, so you can rotate credentials by updating substitutions and re-running `gcloud builds submit`.
+
+# Authentication: API key and service account (OAuth)
+
+The Orchestrator calls the Insights **event count** API per time window; Workers call the **events** API with pagination. Both use the same auth mode.
+
+### API key (`_JC_AUTH_TYPE`: `APIKey`)
+
+- The `{_RESOURCE_PREFIX}-api-key` secret must contain your JumpCloud API key.
+- Requests use the `x-api-key` header. If an organization ID is configured, `x-org-id` is sent as well (optional for some tenants; required for multi-org and for Insights when scoped by org).
+
+### Service account / OAuth client credentials (`_JC_AUTH_TYPE`: `ServiceToken`)
+
+- The **same** secret name `{_RESOURCE_PREFIX}-api-key` must contain **`clientID:clientSecret`** (one colon between ID and secret).
+- At runtime the functions call JumpCloud’s token endpoint (`https://admin-oauth.id.jumpcloud.com/oauth2/token`) with HTTP Basic auth (Base64 of `clientID:clientSecret`), `grant_type=client_credentials`, and `scope=api`, then call Insights with **`Authorization: Bearer <access_token>`** and **`x-org-id`**.
+- **An organization ID is required** for ServiceToken (configure the org secret; for multi-org, use the comma-separated list with `_JC_MULTI_ORG=true`).
+
+# Multiple organizations
+
+Enterprise customers may use one API key or one OAuth client to access **several** JumpCloud organizations.
+
+1. Set **`_JC_MULTI_ORG`** to **`true`** in `cloudbuild.yaml` (or pass `--substitutions=_JC_MULTI_ORG=true` when submitting the build).
+2. Set **`_JC_ORG_ID`** to a **comma-separated** list of organization IDs (optional spaces after commas are trimmed).
+3. Redeploy so the Orchestrator and Worker receive `jc_multi_org=true`.
+
+**Behavior**
+
+- The Orchestrator loops each org: it builds request headers for that org, calls **`/insights/directory/v1/events/count`** per org and service, splits time ranges when needed, and enqueues one Pub/Sub message per chunk. Each message includes an **`org_id`** field so the Worker knows which tenant to query.
+- The Worker reads **`org_id`** from the message (required when `jc_multi_org` is true). Older messages without `org_id` still work when `jc_multi_org` is false by falling back to the org secret.
+- Uploaded files are named so different orgs do not overwrite each other:  
+  `jc_directoryinsights_<orgId>_<service>_<start>_<end>.json.gz`  
+  When no org ID is used (legacy single-tenant flow without `x-org-id`), the file name matches the previous pattern without the org prefix.
 
 # Deploying the Application
 
