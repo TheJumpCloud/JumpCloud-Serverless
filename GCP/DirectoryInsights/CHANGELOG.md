@@ -1,5 +1,10 @@
 # Changelog
 
+## [3.0.0] - 2026-04-08
+
+### Added
+-  Introduces a major architectural overhaul to the JumpCloud Directory Insights GCP integration, migrating it to a highly resilient, event-driven Orchestrator-Worker pattern using Google Cloud Pub/Sub. Similar functionality with the AWS Serverless App
+
 ## [1.0.3] - 2025-03-03
 
 ### Fixes
