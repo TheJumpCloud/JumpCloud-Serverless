@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: 2010-09-09
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
 Parameters:
@@ -6,14 +6,29 @@ Parameters:
     Type: String
     NoEcho: true
     MinLength: 1
+    Description: 'Your JumpCloud API Key, or your Service Account credentials (secretID:secretToken) if using ServiceToken auth.'
+  JcAuthType:
+    Type: String
+    AllowedValues:
+      - APIKey
+      - ServiceToken
+    Default: APIKey
+    Description: 'Authentication method to use. ServiceToken performs an OAuth 2.0 exchange.'
   CronExpression:
     Type: String
-    Default: '0 0 * * ? *'  # Default to every day at midnight
-    Description: Cron expression for the schedule (e.g., "0 0 * * ? *").
+    Default: '0 0 * * ? *'  
+    Description: 'Cron expression for the schedule (e.g., "0 0 * * ? *"). Default to every day at midnight.'
   OrganizationID:
     Type: String
     Default: ''
-    Description: OPTIONAL - This parameter can be used to allow MTP Admins to select which Organization they would like to collect Directory Insights data for.
+    Description: 'OPTIONAL - A specific Org ID string, or the ARN of an AWS Secret containing a comma-separated list of Org IDs (requires JcMultiOrg=true).'
+  JcMultiOrg:
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+    Description: 'Set to true if OrganizationID points to an AWS Secret containing a comma-separated list of Organization IDs.'
   Service:
     Type: String
     Default: "all"
@@ -25,13 +40,17 @@ Parameters:
       - SingleLine
     Default: MultiLine
     Description: 'JSon output indent format - MultiLine or SingleLine'
+  MaxEventsPerWorker:
+    Type: Number
+    Default: 25000
+    Description: 'Maximum number of events a single worker will process before the orchestrator chunks the time window.'
 
 Metadata:
   AWS::ServerlessRepo::Application:
     Name: JumpCloud-DirectoryInsights
     Description: This Serverless Application can be used to collect your JumpCloud Directory Insights data at a regular interval.
     Author: JumpCloud Solutions Architecture
-    SemanticVersion: 3.0.0
+    SemanticVersion: 3.1.0
     HomePageUrl: https://git.io/JJlrZ
     SourceCodeUrl: https://git.io/JJiMo
     LicenseUrl: LICENSE
@@ -76,7 +95,7 @@ Resources:
   JcApiKey:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Description: JumpCloud API Key
+      Description: JumpCloud API Key or OAuth Client Credentials
       SecretString: !Ref JumpCloudApiKey
 
   JcApiResourcePolicy:
@@ -84,7 +103,7 @@ Resources:
     Properties:
       SecretId: !Ref JcApiKey
       ResourcePolicy:
-        Version: 2012-10-17
+        Version: '2012-10-17'
         Statement:
         - Effect: Allow
           Principal:
@@ -116,7 +135,7 @@ Resources:
     Properties:
       Description: Role for the Orchestrator Lambda
       AssumeRolePolicyDocument:
-        Version: 2012-10-17
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -127,11 +146,14 @@ Resources:
       Policies:
         - PolicyName: OrchestratorPermissions
           PolicyDocument:
-            Version: 2012-10-17
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action: sqs:SendMessage
                 Resource: !GetAtt JobQueue.Arn
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: "*" 
 
   OrchestratorFunction:
     Type: AWS::Serverless::Function
@@ -146,15 +168,19 @@ Resources:
       Environment:
         Variables:
           JcApiKeyArn: !Ref JcApiKey
+          JcAuthType: !Ref JcAuthType
           CronExpression: !Ref CronExpression
           service: !Sub ${Service}
           SqsQueueUrl: !Ref JobQueue
           OrgId: !Sub ${OrganizationID}
+          JcMultiOrg: !Ref JcMultiOrg
+          MaxEventsPerWorker: !Ref MaxEventsPerWorker
       Events:
         ScheduleDirectoryInsightsTrigger:
           Type: Schedule
           Properties:
             Schedule: !Sub "cron(${CronExpression})"
+            
   # ---------------------------------------------------------
   # Worker Role & Function
   # ---------------------------------------------------------
@@ -163,18 +189,18 @@ Resources:
     Properties:
       Description: Role for the Worker Lambda
       AssumeRolePolicyDocument:
-        Version: 2012-10-17
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AWSLambdaExecute # Grants S3 PUT and CloudWatch Logs
+        - arn:aws:iam::aws:policy/AWSLambdaExecute 
       Policies:
         - PolicyName: WorkerPermissions
           PolicyDocument:
-            Version: 2012-10-17
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
@@ -193,14 +219,14 @@ Resources:
       Handler: get-jcdirectoryinsights.jc_worker
       MemorySize: 512
       Timeout: 900
-      Runtime: python3.14
+      Runtime: python3.12
       Role: !GetAtt WorkerRole.Arn
       KmsKeyArn: !GetAtt DirectoryInsightsCmk.Arn
       Environment:
         Variables:
           JcApiKeyArn: !Ref JcApiKey
+          JcAuthType: !Ref JcAuthType
           BucketName: !Ref DirectoryInsightsBucket
-          OrgId: !Sub ${OrganizationID}
           JsonFormat: !Sub ${JsonFormat}
       Events:
         SQSTrigger:
@@ -208,6 +234,3 @@ Resources:
           Properties:
             Queue: !GetAtt JobQueue.Arn
             BatchSize: 1
-
-
-           

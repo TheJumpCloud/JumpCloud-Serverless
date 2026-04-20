@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.1.0] - 2026-03-20
+
+### Added
+
+- Test functionality to input start, end time, and directory
+- Multi Org and Service account support 
 ## [3.0.0] - 2026-03-20
 
 ### Added
