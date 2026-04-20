@@ -16,6 +16,7 @@ _Note: This document assumes the use of Python 3.14+_
     - [Packaging the Application](#packaging-the-application)
     - [Deploying the Application](#deploying-the-application)
     - [Formatting JSON](#formatting-json)
+    - [Multiple Organizations](#multiple-organizations)
   - [Updating an Existing Deployment](#updating-an-existing-deployment)
   - [Clean Up / Uninstall](#clean-up--uninstall)
   - [Note on Data Chunking (MAX\_EVENTS\_PER\_WORKER)](#note-on-data-chunking-max_events_per_worker)
@@ -145,6 +146,25 @@ SingleLine Format:
 ![Alt text](image-2.png)
 MultiLine Format:
 ![Alt text](image-1.png)
+
+### Multiple Organizations
+Enterprise customers may use one API key or one OAuth client (Service Account Token) to access several JumpCloud organizations at once.
+
+Create a Secret in AWS Secrets Manager that contains a comma-separated list of your target organization IDs (e.g., orgId1,orgId2,orgId3).
+
+1. Set the JcMultiOrg parameter to true when deploying the CloudFormation stack.
+
+2. Set the OrganizationID parameter, `(e.g., orgId1,orgId2,orgId3)`.
+
+**Behavior**
+
+- The Orchestrator loops through each org: it builds request headers for that org, calls the /insights/directory/v1/events/count endpoint per org and service, splits time ranges when needed, and enqueues one SQS message per chunk. Each message includes an org_id field so the Worker knows which tenant to query.
+
+- The Worker reads the org_id from the SQS message to target the correct organization.
+
+- Uploaded files are automatically named so different orgs do not overwrite each other:
+
+`jc_directoryinsights_<orgId>_<service>_<start>_<end>.json.gz`
 
 ## Updating an Existing Deployment
 To update your existing application to a newer version, simply pull the latest code, re-package the ZIP file, and run the `sam package` and `aws cloudformation deploy` commands again using the **exact same `--stack-name`**. AWS CloudFormation will automatically detect the changes and safely update your existing resources.

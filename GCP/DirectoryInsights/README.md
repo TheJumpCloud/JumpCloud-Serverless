@@ -21,11 +21,13 @@ _Note: This document assumes the use of Python 3.12 on GCP Cloud Functions_
 - [Edit `cloudbuild.yaml`](#edit-cloudbuildyaml)
 - [Cloud Build substitutions](#cloud-build-substitutions)
 - [Authentication: API key and service account (OAuth)](#authentication-api-key-and-service-account-oauth)
+    - [API key (`_JC_AUTH_TYPE`: `APIKey`)](#api-key-_jc_auth_type-apikey)
+    - [Service account / OAuth client credentials (`_JC_AUTH_TYPE`: `ServiceToken`)](#service-account--oauth-client-credentials-_jc_auth_type-servicetoken)
 - [Multiple organizations](#multiple-organizations)
 - [Deploying the Application](#deploying-the-application)
 - [Manual Testing \& Historical Backfill](#manual-testing--historical-backfill)
-  - [Option 1: Using the Google Cloud Console](#option-1-using-the-google-cloud-console)
-  - [Option 2: Using the gcloud CLI](#option-2-using-the-gcloud-cli)
+    - [Option 1: Using the Google Cloud Console](#option-1-using-the-google-cloud-console)
+    - [Option 2: Using the gcloud CLI](#option-2-using-the-gcloud-cli)
 - [Pipeline Architecture \& Error Handling (DLQ)](#pipeline-architecture--error-handling-dlq)
   - [Dead Letter Queue (DLQ)](#dead-letter-queue-dlq)
   - [Redriving Failed Messages](#redriving-failed-messages)
@@ -95,6 +97,8 @@ gcloud services enable storage-component.googleapis.com
 gcloud services enable secretmanager.googleapis.com
 gcloud services enable cloudresourcemanager.googleapis.com
 gcloud services enable pubsub.googleapis.com
+gcloud services enable eventarc.googleapis.com
+gcloud services enable cloudfunctions.googleapis.com
 ```
 
 - Your GCP Project ID and Number. You can automatically fetch and set these as variables in your CLI so you won't need to manually insert them in the commands below. Run this block in your terminal:
@@ -122,10 +126,20 @@ gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJE
 gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM@cloudbuild.gserviceaccount.com --role=roles/resourcemanager.projectIamAdmin
 ```
 
-- You must assign roles to the compute developer service account to access the secrets manager
+- You must assign roles to the compute developer service account
 
 ```bash
-gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role roles/secretmanager.secretAccessor
+gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role=roles/iam.serviceAccountUser
+gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role=roles/secretmanager.admin
+gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role=roles/storage.admin
+gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role=roles/run.admin
+gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role=roles/cloudbuild.builds.builder
+gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role=roles/cloudscheduler.admin
+gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role=roles/cloudfunctions.invoker
+gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role=roles/cloudfunctions.developer
+gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role=roles/pubsub.admin
+gcloud projects add-iam-policy-binding $PROJECTID --member=serviceAccount:$PROJECTNUM-compute@developer.gserviceaccount.com --role=roles/resourcemanager.projectIamAdmin
 ```
 
 - You must also assign roles to the App Engine service account `*@appspot.gserviceaccount.com`. This account serves as identity when accessing Cloud Storage and Secret Manager. [Function Identity](https://cloud.google.com/functions/docs/securing/function-identity#:~:text=Every%20function%20is%20associated%20with,as%20its%20runtime%20service%20account.)
