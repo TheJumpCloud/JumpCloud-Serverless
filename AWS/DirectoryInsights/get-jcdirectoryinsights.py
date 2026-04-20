@@ -27,7 +27,7 @@ def get_secret(secret_id, suppress_error=False):
         return response['SecretString']
     except ClientError as e:
         if not suppress_error:
-            logger.error(f"Error retrieving secret {secret_id}: {e}")
+            logger.error("Error retrieving secret from AWS Secrets Manager.")
         raise Exception(e)
 
 JC_AUTH_TYPE_API_KEY = "APIKey"
