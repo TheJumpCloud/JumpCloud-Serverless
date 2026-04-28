@@ -44,13 +44,21 @@ Parameters:
     Type: Number
     Default: 25000
     Description: 'Maximum number of events a single worker will process before the orchestrator chunks the time window.'
+  JcRegion:
+    Type: String
+    AllowedValues:
+      - STANDARD
+      - EU
+      - IN
+    Default: STANDARD
+    Description: 'Deployment region for JumpCloud API. STANDARD uses api.jumpcloud.com, EU uses api.eu.jumpcloud.com, IN uses api.in.jumpcloud.com.'
 
 Metadata:
   AWS::ServerlessRepo::Application:
     Name: JumpCloud-DirectoryInsights
     Description: This Serverless Application can be used to collect your JumpCloud Directory Insights data at a regular interval.
     Author: JumpCloud Solutions Architecture
-    SemanticVersion: 3.1.0
+    SemanticVersion: 3.2.0
     HomePageUrl: https://git.io/JJlrZ
     SourceCodeUrl: https://git.io/JJiMo
     LicenseUrl: LICENSE
@@ -175,6 +183,7 @@ Resources:
           OrgId: !Sub ${OrganizationID}
           JcMultiOrg: !Ref JcMultiOrg
           MaxEventsPerWorker: !Ref MaxEventsPerWorker
+          JcRegion: !Ref JcRegion
       Events:
         ScheduleDirectoryInsightsTrigger:
           Type: Schedule
@@ -228,6 +237,7 @@ Resources:
           JcAuthType: !Ref JcAuthType
           BucketName: !Ref DirectoryInsightsBucket
           JsonFormat: !Sub ${JsonFormat}
+          JcRegion: !Ref JcRegion
       Events:
         SQSTrigger:
           Type: SQS
