@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.1.1] - 2026-04-30
+
+### Added
+
+- Added support for base url region (EU, IN)
+
 ## [3.1.0] - 2026-04-08
 
 ### Added

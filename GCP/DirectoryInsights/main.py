@@ -60,7 +60,14 @@ JC_AUTH_TYPE_API_KEY = "APIKey"
 JC_AUTH_TYPE_SERVICE_TOKEN = "ServiceToken"
 JC_OAUTH_TOKEN_URL = "https://admin-oauth.id.jumpcloud.com/oauth2/token"
 JC_USER_AGENT = "JumpCloud_GCPServerless.DirectoryInsights/3.1.0"
+JC_API_BASE_URL = os.environ.get("jc_base_url", "https://api.jumpcloud.com")
 
+# Check if is empty
+if JC_API_BASE_URL is None or str(JC_API_BASE_URL).strip() == "":
+    raise Exception("Environment variable jc_base_url is empty. Please set it to the appropriate JumpCloud API base URL (e.g. https://api.jumpcloud.com for US, https://api.eu.jumpcloud.com for EU, or https://api.in.jumpcloud.com for IN).")
+
+if JC_API_BASE_URL.endswith("/"):
+    JC_API_BASE_URL = JC_API_BASE_URL[:-1]
 
 def _normalize_jc_auth_type(value):
     if value is None or str(value).strip() == "":
@@ -378,7 +385,7 @@ def jc_orchestrator(request):
             start_iso = window_start.isoformat("T").replace("+00:00", "Z")
             end_iso = window_end.isoformat("T").replace("+00:00", "Z")
 
-            count_url = "https://api.jumpcloud.com/insights/directory/v1/events/count"
+            count_url = f"{JC_API_BASE_URL}/insights/directory/v1/events/count"
 
             count_body = {'service': [service], 'start_time': start_iso, 'end_time': end_iso}
 
@@ -485,7 +492,7 @@ def jc_worker(event, context):
     start_date = payload['start_time']
     end_date = payload['end_time']
     
-    url = "https://api.jumpcloud.com/insights/directory/v1/events"
+    url = f"{JC_API_BASE_URL}/insights/directory/v1/events"
     body = {
         'service': [service],
         'start_time': start_date,
