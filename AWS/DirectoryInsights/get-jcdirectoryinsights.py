@@ -33,7 +33,25 @@ def get_secret(secret_id, suppress_error=False):
 JC_AUTH_TYPE_API_KEY = "APIKey"
 JC_AUTH_TYPE_SERVICE_TOKEN = "ServiceToken"
 JC_OAUTH_TOKEN_URL = "https://admin-oauth.id.jumpcloud.com/oauth2/token"
-JC_USER_AGENT = "JumpCloud_AWSServerless.DirectoryInsights/3.1.0"
+JC_USER_AGENT = "JumpCloud_AWSServerless.DirectoryInsights/3.2.0"
+
+JC_REGION_URL_MAP = {
+    "EU": "https://api.eu.jumpcloud.com",
+    "IN": "https://api.in.jumpcloud.com",
+    "STANDARD": "https://api.jumpcloud.com",
+}
+
+def get_jc_base_url():
+    """
+    Returns the JumpCloud API base URL based on the JcRegion environment variable.
+    Defaults to STANDARD (api.jumpcloud.com) if not set or unrecognized.
+    """
+    region = os.environ.get("JcRegion", "STANDARD").strip().upper() 
+    base_url = JC_REGION_URL_MAP.get(region)
+    if base_url is None:
+        logger.warning(f"Unrecognized JcRegion value '{region}'. Falling back to STANDARD.")
+        base_url = JC_REGION_URL_MAP["STANDARD"]
+    return base_url
 
 def _normalize_jc_auth_type(value):
     if value is None or str(value).strip() == "":
@@ -288,7 +306,8 @@ def jc_orchestrator(event, context):
             start_iso = previousTime.isoformat("T").replace("+00:00", "Z")
             end_iso = now.isoformat("T").replace("+00:00", "Z")
             
-            count_url = "https://api.jumpcloud.com/insights/directory/v1/events/count"
+            base_url = get_jc_base_url()
+            count_url = f"{base_url}/insights/directory/v1/events/count"
             count_body = {'service': [service], 'start_time': start_iso, 'end_time': end_iso}
             
             try:
@@ -360,7 +379,8 @@ def jc_worker(event, context):
             logger.error(str(e))
             raise Exception(e)
 
-        url = "https://api.jumpcloud.com/insights/directory/v1/events"
+        base_url = get_jc_base_url()
+        url = f"{base_url}/insights/directory/v1/events"
         body = {
             'service': [service],
             'start_time': startDate,

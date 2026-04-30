@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.2.0] - 2026-04-28
+
+### Added
+- New `JcRegion` parameter in `serverless.yaml` to support multi-region JumpCloud API deployments (`STANDARD`, `EU`, `IN`).
+- `get_jc_base_url()` helper function in `get-jcdirectoryinsights.py` that resolves the correct API base URL based on the `JcRegion` environment variable.
+
+### Changed
+- Orchestrator and Worker functions now use a dynamic base URL (`api.jumpcloud.com`, `api.eu.jumpcloud.com`, or `api.in.jumpcloud.com`) instead of a hardcoded value.
+
 ## [3.1.0] - 2026-03-20
 
 ### Added
