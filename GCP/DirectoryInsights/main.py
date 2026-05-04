@@ -59,7 +59,7 @@ def get_secret(project_id, secret_name):
 JC_AUTH_TYPE_API_KEY = "APIKey"
 JC_AUTH_TYPE_SERVICE_TOKEN = "ServiceToken"
 JC_OAUTH_TOKEN_URL = "https://admin-oauth.id.jumpcloud.com/oauth2/token"
-JC_USER_AGENT = "JumpCloud_GCPServerless.DirectoryInsights/3.1.0"
+JC_USER_AGENT = "JumpCloud_GCPServerless.DirectoryInsights/3.1.1"
 JC_API_BASE_URL = os.environ.get("jc_base_url", "https://api.jumpcloud.com")
 
 # Check if is empty
