@@ -4,3 +4,4 @@ google-cloud-secret-manager>=2.20.0
 google-cloud-pubsub>=2.21.0
 google-cloud-storage>=2.16.0
 functions-framework>=3.5.0
+gunicorn>=22.0.0

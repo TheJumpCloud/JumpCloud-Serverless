@@ -102,6 +102,7 @@ steps:
       - --entry-point=jc_orchestrator
       - --trigger-http
       - --no-allow-unauthenticated
+      - --ingress-settings=internal-only
       - --run-service-account=$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com
 
   # Deploy the Worker Cloud Function & Configure DLQ
@@ -121,6 +122,7 @@ steps:
           --trigger-topic=${_RESOURCE_PREFIX}-jobs \
           --retry \
           --no-allow-unauthenticated \
+          --ingress-settings=internal-only \
           --run-service-account=$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com
 
         # 2. Get the auto-generated Pub/Sub Subscription
@@ -163,6 +165,7 @@ steps:
           --entry-point=redrive_dlq \
           --trigger-http \
           --no-allow-unauthenticated \
+          --ingress-settings=internal-only \
           --run-service-account=$_GCP_PROJECT_ID_NAME@appspot.gserviceaccount.com
 
         # 2. Grant the service account permission to PULL from the DLQ subscription
