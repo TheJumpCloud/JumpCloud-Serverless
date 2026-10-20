@@ -49,8 +49,8 @@ steps:
     args:
       - -c
       - |
-        gsutil ls -p $_GCP_PROJECT_ID_NAME gs://${_RESOURCE_PREFIX}-di-bucket >/dev/null 2>&1 || \
-        gsutil mb -p $_GCP_PROJECT_ID_NAME -c $_STORAGE_CLASS -l $_REGION_LOCATION gs://${_RESOURCE_PREFIX}-di-bucket
+        gcloud storage ls gs://${_RESOURCE_PREFIX}-di-bucket --project=$_GCP_PROJECT_ID_NAME >/dev/null 2>&1 || \
+        gcloud storage buckets create gs://${_RESOURCE_PREFIX}-di-bucket --project=$_GCP_PROJECT_ID_NAME --default-storage-class=$_STORAGE_CLASS --location=$_REGION_LOCATION
 
   # Create or update Secrets (new version becomes "latest" for functions using versions/latest)
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
